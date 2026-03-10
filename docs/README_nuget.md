@@ -19,7 +19,7 @@ uSchema adds a **Schema** tab to every content node workspace and a **uSchema** 
 - **Annotated JSON examples** — colour-coded view showing exactly which properties need adding
 - **Broad schema type support** — 30+ types including Article, NewsArticle, WebPage, Organization, BreadcrumbList, FAQPage, LocalBusiness, Product, Event, Recipe, Person, WebSite, VideoObject, HowTo, JobPosting, and more
 - **`@graph` block support** — multi-entity JSON-LD documents are fully parsed
-- **Source location indicator** — shows whether each block is in `<head>` or `<body>`
+- **Source location indicator** — shows whether each block is in `<head>` or `<body>`, with advice on placement and a hint pointing to the responsible Razor view based on the content type alias (e.g. `Views/BlogPost.cshtml`)
 
 ## Requirements
 
