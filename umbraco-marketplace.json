@@ -5,7 +5,7 @@
       "ImageUrl": "https://github.com/Jordan-Smith-Dev.png"
     },
     "NuGetPackageId": "Umbraco.Community.uSchema",
-    "Category": "SEO",
+    "Category": "Search",
     "Description": "Validate the JSON-LD structured data on your published Umbraco content pages directly inside the backoffice. uSchema adds a Schema tab to every content node — fetch, parse, and validate all JSON-LD blocks with error detail, warnings, and annotated examples.",
     "LicenseTypes": [ "Free" ],
     "IssueTrackerUrl": "https://github.com/Jordan-Smith-Dev/uSchema/issues",
