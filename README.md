@@ -2,13 +2,13 @@
 
 [![Downloads](https://img.shields.io/nuget/dt/Umbraco.Community.SchemaPreview?color=cc9900)](https://www.nuget.org/packages/Umbraco.Community.SchemaPreview/)
 [![NuGet](https://img.shields.io/nuget/vpre/Umbraco.Community.SchemaPreview?color=0273B3)](https://www.nuget.org/packages/Umbraco.Community.SchemaPreview)
-[![GitHub license](https://img.shields.io/github/license/JordanSmith/Umbraco.Community.SchemaPreview?color=8AB803)](LICENSE)
+[![GitHub license](https://img.shields.io/github/license/Jordan-Smith-Dev/uSchema?color=8AB803)](LICENSE)
 
 Validate the JSON-LD structured data on your published Umbraco content pages — directly inside the backoffice.
 
 uSchema adds a **Schema** tab to every content node workspace and a **uSchema** dashboard. Both fetch the live published page, parse every `<script type="application/ld+json">` block, and validate each one against schema.org recommendations.
 
-<!-- Screenshot: docs/images/workspace-tab.png -->
+![uSchema workspace tab showing JSON-LD validation results](docs/uSchema_preview-001.png)
 
 ## Features
 
@@ -53,7 +53,9 @@ No configuration is required. After installing and restarting your site, the **S
 
 ## Screenshots
 
-> Screenshots welcome — see [docs/images/](docs/images/) to add them.
+![uSchema workspace tab](docs/uSchema_preview-001.png)
+
+![uSchema dashboard](docs/uSchema_preview-002.png)
 
 ## Contributing
 
@@ -61,7 +63,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup.
 
 ## Issues
 
-Please report bugs or feature requests at [GitHub Issues](https://github.com/JordanSmith/Umbraco.Community.SchemaPreview/issues).
+Please report bugs or feature requests at [GitHub Issues](https://github.com/Jordan-Smith-Dev/uSchema/issues).
 
 ## License
 
