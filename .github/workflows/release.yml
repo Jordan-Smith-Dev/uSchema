@@ -27,6 +27,12 @@ jobs:
       with:
         node-version: '22'
 
+    - name: Stamp version into umbraco-package.json
+      run: |
+        $json = Get-Content src/Umbraco.Community.SchemaPreview/Client/public/umbraco-package.json -Raw | ConvertFrom-Json
+        $json.version = "${{ github.ref_name }}"
+        $json | ConvertTo-Json -Depth 10 | Set-Content src/Umbraco.Community.SchemaPreview/Client/public/umbraco-package.json
+
     - name: Build frontend
       working-directory: src/Umbraco.Community.SchemaPreview/Client
       run: |
