@@ -13,8 +13,8 @@ Contributions to this package are most welcome!
 1. Clone the repository
 
    ```bash
-   git clone https://github.com/JordanSmith/Umbraco.Community.SchemaPreview.git
-   cd Umbraco.Community.SchemaPreview
+   git clone https://github.com/Jordan-Smith-Dev/uSchema.git
+   cd uSchema
    ```
 
 2. Build the frontend
