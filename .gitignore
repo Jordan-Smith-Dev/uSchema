@@ -3,6 +3,7 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+
 # User-specific files
 *.rsuser
 *.suo
@@ -36,6 +37,9 @@ bld/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
+.idea/
+.vscode/
+.claude/
 # Umbraco test site runtime data (database, logs, media, cache)
 src/Umbraco.Community.SchemaPreview.TestSite/umbraco/Data/
 src/Umbraco.Community.SchemaPreview.TestSite/umbraco/Logs/
