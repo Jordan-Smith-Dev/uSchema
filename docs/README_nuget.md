@@ -1,7 +1,7 @@
-# Umbraco Community uSchema
+# uSchema
 
-[![Downloads](https://img.shields.io/nuget/dt/Umbraco.Community.SchemaPreview?color=cc9900)](https://www.nuget.org/packages/Umbraco.Community.SchemaPreview/)
-[![NuGet](https://img.shields.io/nuget/vpre/Umbraco.Community.SchemaPreview?color=0273B3)](https://www.nuget.org/packages/Umbraco.Community.SchemaPreview)
+[![Downloads](https://img.shields.io/nuget/dt/Umbraco.Community.uSchema?color=cc9900)](https://www.nuget.org/packages/Umbraco.Community.uSchema/)
+[![NuGet](https://img.shields.io/nuget/vpre/Umbraco.Community.uSchema?color=0273B3)](https://www.nuget.org/packages/Umbraco.Community.uSchema)
 [![GitHub license](https://img.shields.io/github/license/Jordan-Smith-Dev/uSchema?color=8AB803)](https://github.com/Jordan-Smith-Dev/uSchema/blob/main/LICENSE)
 
 Validate the JSON-LD structured data on your published Umbraco content pages — directly inside the backoffice.
@@ -29,7 +29,7 @@ uSchema adds a **Schema** tab to every content node workspace and a **uSchema** 
 ## Installation
 
 ```bash
-dotnet add package Umbraco.Community.SchemaPreview
+dotnet add package Umbraco.Community.uSchema
 ```
 
 No configuration is required. After installing and restarting your site, the **Schema** tab appears on all content nodes and the **uSchema** dashboard appears under the Content section.

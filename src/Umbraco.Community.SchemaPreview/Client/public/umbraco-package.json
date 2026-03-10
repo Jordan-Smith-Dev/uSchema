@@ -1,12 +1,12 @@
 {
-  "id": "Umbraco.Community.SchemaPreview",
-  "name": "Umbraco.Community.SchemaPreview",
+  "id": "Umbraco.Community.uSchema",
+  "name": "Umbraco.Community.uSchema",
   "version": "1.0.1",
   "allowTelemetry": true,
   "extensions": [
     {
       "name": "uSchema Bundle",
-      "alias": "Umbraco.Community.SchemaPreview.Bundle",
+      "alias": "Umbraco.Community.uSchema.Bundle",
       "type": "bundle",
       "js": "/App_Plugins/UmbracoCommunitySchemaPreview/umbraco-community-schema-preview.js"
     }

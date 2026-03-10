@@ -9,7 +9,8 @@
       "Bash(ls -la /c/DEV-PERSONAL/UmbracoPackages/Umbraco.Community.SchemaPreview/*.md)",
       "Bash(cmd //c robocopy \"C:\\\\DEV-PERSONAL\\\\UmbracoPackages\\\\Umbraco.Community.SchemaPreview\" \"C:\\\\DEV-PERSONAL\\\\uSchema\" /E /XD .git bin obj node_modules .vs umbraco /XF \"*.sqlite.db\" \"*.sqlite.db-shm\" \"*.sqlite.db-wal\" \"*.user\" \"*.suo\")",
       "Bash(echo \"Robocopy exit code: $?\")",
-      "Bash(powershell -ExecutionPolicy Bypass -File \"C:\\\\DEV-PERSONAL\\\\copy_uschema.ps1\")"
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:\\\\DEV-PERSONAL\\\\copy_uschema.ps1\")",
+      "Bash(grep -r \"secret\\\\|password\\\\|api_key\\\\|apikey\\\\|token\\\\|credential\" /c/DEV-PERSONAL/uSchema/src/Umbraco.Community.SchemaPreview --include=*.cs --include=*.json -i)"
     ]
   }
 }
