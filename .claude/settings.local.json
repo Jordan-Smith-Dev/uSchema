@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build)",
+      "Bash(dotnet-ildasm Umbraco.Core.dll)",
+      "Bash(powershell -Command \":*)",
+      "Bash(powershell -Command \"[System.Reflection.Assembly]::LoadFile\\(''C:/Users/JordanSmith/.nuget/packages/umbraco.cms.core/17.2.0/lib/net10.0/Umbraco.Core.dll''\\).GetTypes\\(\\) | Where-Object { [bool]\\($_.IsInterface\\) -and [bool]\\($_.Name -match ''Cache''\\) } | Select-Object -ExpandProperty FullName | Sort-Object\")",
+      "Bash(grep -l 'IPublishedContentCache' \"C:/Users/JordanSmith/.nuget/packages/\"*\"/17.2.0/lib/net10.0/\"*.xml)",
+      "Bash(ls -la /c/DEV-PERSONAL/UmbracoPackages/Umbraco.Community.SchemaPreview/*.md)",
+      "Bash(cmd //c robocopy \"C:\\\\DEV-PERSONAL\\\\UmbracoPackages\\\\Umbraco.Community.SchemaPreview\" \"C:\\\\DEV-PERSONAL\\\\uSchema\" /E /XD .git bin obj node_modules .vs umbraco /XF \"*.sqlite.db\" \"*.sqlite.db-shm\" \"*.sqlite.db-wal\" \"*.user\" \"*.suo\")",
+      "Bash(echo \"Robocopy exit code: $?\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:\\\\DEV-PERSONAL\\\\copy_uschema.ps1\")"
+    ]
+  }
+}
