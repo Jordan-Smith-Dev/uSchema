@@ -1,0 +1,14 @@
+{
+    "$schema": "https://marketplace.umbraco.com/umbraco-marketplace-schema.json",
+    "AuthorDetails": {
+      "Name": "Jordan Smith",
+      "ImageUrl": "https://github.com/JordanSmith.png"
+    },
+    "Category": "SEO",
+    "Description": "Validate the JSON-LD structured data on your published Umbraco content pages directly inside the backoffice. uSchema adds a Schema tab to every content node — fetch, parse, and validate all JSON-LD blocks with error detail, warnings, and annotated examples.",
+    "LicenseTypes": [ "Free" ],
+    "IssueTrackerUrl": "https://github.com/JordanSmith/Umbraco.Community.SchemaPreview/issues",
+    "PackageType": "Package",
+    "Tags": ["seo", "json-ld", "structured-data", "schema-org", "validation", "backoffice"],
+    "Title": "Umbraco Community uSchema"
+  }
