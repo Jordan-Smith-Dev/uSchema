@@ -3,6 +3,7 @@
 [![Downloads](https://img.shields.io/nuget/dt/Umbraco.Community.uSchema?color=cc9900)](https://www.nuget.org/packages/Umbraco.Community.uSchema/)
 [![NuGet](https://img.shields.io/nuget/vpre/Umbraco.Community.uSchema?color=0273B3)](https://www.nuget.org/packages/Umbraco.Community.uSchema)
 [![GitHub license](https://img.shields.io/github/license/Jordan-Smith-Dev/uSchema?color=8AB803)](https://github.com/Jordan-Smith-Dev/uSchema/blob/main/LICENSE)
+[![Umbraco Marketplace](https://img.shields.io/badge/Umbraco-Marketplace-%233544B1?logo=umbraco)](https://marketplace.umbraco.com/package/umbraco.community.uschema)
 
 Validate the JSON-LD structured data on your published Umbraco content pages — directly inside the backoffice.
 
