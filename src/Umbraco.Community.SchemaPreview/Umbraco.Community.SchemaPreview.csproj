@@ -10,7 +10,7 @@
     <Product>Umbraco.Community.uSchema</Product>
     <PackageId>Umbraco.Community.uSchema</PackageId>
     <Title>uSchema</Title>
-    <Description>Validates JSON-LD structured data on published Umbraco content pages via a workspace tab in the backoffice.</Description>
+    <Description>Extends the Umbraco backoffice with a Schema workspace tab and dashboard, fetching every published page's JSON-LD blocks and validating them against schema.org requirements and Google's Rich Results criteria — with error detail, annotated fix suggestions, duplicate detection, and per-page scan history.</Description>
     <PackageTags>umbraco;umbraco-marketplace;schema;json-ld;structured-data;seo</PackageTags>
     <Authors>Jordan Smith</Authors>
     <Copyright>$([System.DateTime]::UtcNow.ToString(`yyyy`)) © Jordan Smith</Copyright>

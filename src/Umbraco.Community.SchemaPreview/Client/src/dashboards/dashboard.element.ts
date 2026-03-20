@@ -7,6 +7,7 @@ import {
 } from '@umbraco-cms/backoffice/external/lit';
 import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
 import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
+import { UMB_NOTIFICATION_CONTEXT } from '@umbraco-cms/backoffice/notification';
 
 // ── Shared types ────────────────────────────────────────────────────────────
 
@@ -17,6 +18,8 @@ type SchemaBlock = {
     errors: string[];
     warnings: string[];
     location?: 'head' | 'body';
+    richResultStatus?: 'eligible' | 'ineligible' | 'unknown';
+    richResultMissingFields?: string[];
 };
 
 type ValidationResult = {
@@ -24,6 +27,7 @@ type ValidationResult = {
     published: boolean;
     documentType?: string;
     hasTemplate?: boolean;
+    suggestedSchemaType?: string;
     blocks: SchemaBlock[];
     summary: {
         valid: number;
@@ -144,11 +148,161 @@ function enrichMessage(raw: string): EnrichedMessage {
 
 const API_BASE = '/umbraco/umbracocommunityschemapreview/api/v1';
 
+const SCHEMA_EXAMPLES: Record<string, string> = {
+    Article: `{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Your article headline",
+  "datePublished": "2024-01-15",
+  "author": { "@type": "Person", "name": "Author Name" },
+  "image": "https://example.com/article-image.jpg"
+}`,
+    BlogPosting: `{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Your blog post title",
+  "datePublished": "2024-01-15",
+  "author": { "@type": "Person", "name": "Author Name" },
+  "image": "https://example.com/blog-image.jpg"
+}`,
+    Product: `{
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": "Product Name",
+  "description": "A short description of the product.",
+  "offers": {
+    "@type": "Offer",
+    "price": "29.99",
+    "priceCurrency": "GBP",
+    "availability": "https://schema.org/InStock"
+  }
+}`,
+    WebPage: `{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Page Title",
+  "url": "https://example.com/page"
+}`,
+    Event: `{
+  "@context": "https://schema.org",
+  "@type": "Event",
+  "name": "Event Name",
+  "startDate": "2025-06-15T10:00:00",
+  "location": {
+    "@type": "Place",
+    "name": "Venue Name",
+    "address": "123 Example Street, London"
+  }
+}`,
+    LocalBusiness: `{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "Business Name",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "123 Example Street",
+    "addressLocality": "London"
+  },
+  "telephone": "+44 20 1234 5678"
+}`,
+    Organization: `{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Organisation Name",
+  "url": "https://example.com",
+  "logo": "https://example.com/logo.png"
+}`,
+    Person: `{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Full Name",
+  "url": "https://example.com/author/full-name"
+}`,
+    Author: `{
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Full Name",
+  "url": "https://example.com/author/full-name"
+}`,
+    FAQPage: `{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is your question?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Your answer here."
+      }
+    }
+  ]
+}`,
+    Recipe: `{
+  "@context": "https://schema.org",
+  "@type": "Recipe",
+  "name": "Recipe Name",
+  "recipeIngredient": ["1 cup flour", "2 eggs"],
+  "recipeInstructions": "Step-by-step instructions here."
+}`,
+    JobPosting: `{
+  "@context": "https://schema.org",
+  "@type": "JobPosting",
+  "title": "Job Title",
+  "description": "Role description.",
+  "datePosted": "2024-01-15",
+  "hiringOrganization": { "@type": "Organization", "name": "Company Name" },
+  "jobLocation": {
+    "@type": "Place",
+    "address": { "@type": "PostalAddress", "addressLocality": "London" }
+  }
+}`,
+    VideoObject: `{
+  "@context": "https://schema.org",
+  "@type": "VideoObject",
+  "name": "Video Title",
+  "description": "A short description of the video.",
+  "thumbnailUrl": "https://example.com/thumbnail.jpg",
+  "uploadDate": "2024-01-15"
+}`,
+};
+
 const svgRotateCw = html`<svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>`;
 
 const svgExternalLink = html`<svg class="btn-icon" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>`;
 
 const svgChevron = (up: boolean) => html`<svg class="btn-icon${up ? ' btn-icon--up' : ''}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m4 9 8 8 8-8"></path></svg>`;
+
+const svgStatValid = html`<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>`;
+const svgStatWarning = html`<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
+const svgStatInvalid = html`<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>`;
+const svgStatBlocks = html`<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>`;
+
+const RICH_RESULT_DOCS: Record<string, string> = {
+    Article: 'https://developers.google.com/search/docs/appearance/structured-data/article',
+    NewsArticle: 'https://developers.google.com/search/docs/appearance/structured-data/article',
+    BlogPosting: 'https://developers.google.com/search/docs/appearance/structured-data/article',
+    BreadcrumbList: 'https://developers.google.com/search/docs/appearance/structured-data/breadcrumb',
+    FAQPage: 'https://developers.google.com/search/docs/appearance/structured-data/faqpage',
+    HowTo: 'https://developers.google.com/search/docs/appearance/structured-data/how-to',
+    JobPosting: 'https://developers.google.com/search/docs/appearance/structured-data/job-posting',
+    LocalBusiness: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
+    Restaurant: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
+    Store: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
+    Hotel: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
+    Product: 'https://developers.google.com/search/docs/appearance/structured-data/product',
+    Recipe: 'https://developers.google.com/search/docs/appearance/structured-data/recipe',
+    Review: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
+    AggregateRating: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
+    VideoObject: 'https://developers.google.com/search/docs/appearance/structured-data/video',
+    Event: 'https://developers.google.com/search/docs/appearance/structured-data/event',
+    SportsEvent: 'https://developers.google.com/search/docs/appearance/structured-data/event',
+    MusicEvent: 'https://developers.google.com/search/docs/appearance/structured-data/event',
+    Course: 'https://developers.google.com/search/docs/appearance/structured-data/course',
+    Movie: 'https://developers.google.com/search/docs/appearance/structured-data/movie',
+    Dataset: 'https://developers.google.com/search/docs/appearance/structured-data/dataset',
+    SoftwareApplication: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
+};
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -162,11 +316,15 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
     @state() private _collapsedBlocks = new Set<number>();
 
     private _tokenProvider?: () => string | Promise<string>;
+    private _notificationContext?: typeof UMB_NOTIFICATION_CONTEXT.TYPE;
 
     override connectedCallback() {
         super.connectedCallback();
         this.consumeContext(UMB_AUTH_CONTEXT, (authContext) => {
             this._tokenProvider = authContext?.getOpenApiConfiguration().token;
+        });
+        this.consumeContext(UMB_NOTIFICATION_CONTEXT, (ctx) => {
+            this._notificationContext = ctx;
         });
     }
 
@@ -216,6 +374,14 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                     `Validation request failed: ${res.status} ${res.statusText} — URL: ${url}`,
                 );
             this._result = await res.json();
+            if (this._result?.published && !this._result.fetchError) {
+                this._notificationContext?.peek('positive', {
+                    data: {
+                        headline: 'Validation saved to history',
+                        message: `Open the page in the content tree and switch to the uSchema tab to view the full history.`,
+                    },
+                });
+            }
         } catch (e: unknown) {
             this._error =
                 e instanceof Error
@@ -329,42 +495,70 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
         if (!this._result) return null;
         const s = this._result.summary;
         const f = this._activeFilter;
+        const total = s.valid + s.warnings + s.invalid;
 
-        const tagClass = (filter: 'valid' | 'warning' | 'invalid') => {
-            if (f === null) return 'filter-tag';
-            if (f === filter) return 'filter-tag filter-tag--active';
-            return 'filter-tag filter-tag--dimmed';
+        const cardClass = (filter: 'valid' | 'warning' | 'invalid') => {
+            if (f === null) return `stat-card stat-card--${filter}`;
+            if (f === filter) return `stat-card stat-card--${filter} stat-card--active`;
+            return `stat-card stat-card--${filter} stat-card--dimmed`;
         };
 
         return html`
-            <div class="summary-row">
-                <div class="summary-filters">
-                    <uui-tag
-                        color="positive"
-                        class=${tagClass('valid')}
-                        @click=${() => this._toggleFilter('valid')}
-                        title="Click to filter by valid blocks"
-                    >
-                        Valid: ${s.valid}
-                    </uui-tag>
-                    <uui-tag
-                        color="warning"
-                        class=${tagClass('warning')}
-                        @click=${() => this._toggleFilter('warning')}
-                        title="Click to filter by warning blocks"
-                    >
-                        Warnings: ${s.warnings}
-                    </uui-tag>
-                    <uui-tag
-                        color="danger"
-                        class=${tagClass('invalid')}
-                        @click=${() => this._toggleFilter('invalid')}
-                        title="Click to filter by invalid blocks"
-                    >
-                        Invalid: ${s.invalid}
-                    </uui-tag>
+            <div class="stats-row">
+                <div
+                    class=${cardClass('valid')}
+                    @click=${() => this._toggleFilter('valid')}
+                    title="Click to filter by valid blocks"
+                    role="button" tabindex="0"
+                >
+                    <div class="stat-card__icon">${svgStatValid}</div>
+                    <div class="stat-card__info">
+                        <span class="stat-card__value">${s.valid}</span>
+                        <span class="stat-card__label">Valid</span>
+                    </div>
                 </div>
 
+                <div
+                    class=${cardClass('warning')}
+                    @click=${() => this._toggleFilter('warning')}
+                    title="Click to filter by warning blocks"
+                    role="button" tabindex="0"
+                >
+                    <div class="stat-card__icon">${svgStatWarning}</div>
+                    <div class="stat-card__info">
+                        <span class="stat-card__value">${s.warnings}</span>
+                        <span class="stat-card__label">Warnings</span>
+                    </div>
+                </div>
+
+                <div
+                    class=${cardClass('invalid')}
+                    @click=${() => this._toggleFilter('invalid')}
+                    title="Click to filter by invalid blocks"
+                    role="button" tabindex="0"
+                >
+                    <div class="stat-card__icon">${svgStatInvalid}</div>
+                    <div class="stat-card__info">
+                        <span class="stat-card__value">${s.invalid}</span>
+                        <span class="stat-card__label">Invalid</span>
+                    </div>
+                </div>
+
+                <div class="stat-card stat-card--total">
+                    <div class="stat-card__icon">${svgStatBlocks}</div>
+                    <div class="stat-card__info">
+                        <span class="stat-card__value">${total}</span>
+                        <span class="stat-card__label">Total Blocks</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="filter-row">
+                <div class="filter-row__hint">
+                    ${f
+                        ? html`<p class="filter-hint">Showing <strong>${f}</strong> blocks only &mdash; click the card again to clear.</p>`
+                        : null}
+                </div>
                 <div class="summary-actions">
                     <uui-button
                         look="primary"
@@ -411,15 +605,6 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                         : null}
                 </div>
             </div>
-
-            ${f
-                ? html`
-                      <p class="filter-hint">
-                          Showing ${f} blocks only &mdash; click the tag again
-                          to clear.
-                      </p>
-                  `
-                : null}
         `;
     }
 
@@ -473,7 +658,10 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
 
     private _renderJsonBlock(b: SchemaBlock) {
         return html`
-            <umb-code-block language="JSON">${b.raw}</umb-code-block>
+            <div class="json-viewer">
+                <div class="json-viewer__header">JSON — ${b.type}</div>
+                <pre class="json-viewer__pre"><code class="json-viewer__code">${b.raw}</code></pre>
+            </div>
         `;
     }
 
@@ -500,13 +688,22 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
             html`<span class="jv-line jv-line--ghost jv-line--${kind}">${indent}<span class="jv-ghost-pill">${kind === 'error' ? '✗ missing' : '+ add'}</span> &quot;${prop}&quot;: ${this._exampleValue(prop)}${'\n'}</span>`;
 
         return html`
-            <div class="json-viewer">
-                <div class="json-viewer__header">json examples</div>
-                <pre class="json-viewer__pre"><code>${[
-                    ...lines.slice(0, insertIdx).map(renderLine),
-                    ...annotations.map(renderGhost),
-                    ...lines.slice(insertIdx).map(renderLine),
-                ]}</code></pre>
+            <div class="examples-block">
+                <strong class="examples-block__title">Suggested fix</strong>
+                <p class="examples-block__desc">
+                    The block below shows your current markup with all flagged fields added inline —
+                    addressing all of the errors and warnings above, not just the last one.
+                    These are illustrative examples only; review and adjust any placeholder values
+                    to ensure they are accurate and valid for your content before publishing.
+                </p>
+                <div class="json-viewer">
+                    <div class="json-viewer__header">JSON — ${b.type}</div>
+                    <pre class="json-viewer__pre"><code>${[
+                        ...lines.slice(0, insertIdx).map(renderLine),
+                        ...annotations.map(renderGhost),
+                        ...lines.slice(insertIdx).map(renderLine),
+                    ]}</code></pre>
+                </div>
             </div>
         `;
     }
@@ -530,7 +727,7 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                         ${locationPill}${locationNote}
                     </div>
                     <div class="source-meta__row">
-                        <span class="source-note">Template: <strong>${this._result.documentType}</strong> — look for <code>Views/${this._result.documentType}.cshtml</code> or a partial view used by that template.</span>
+                        <span class="source-note">Template: <strong>${this._result.documentType}</strong> — this schema may originate from <code>Views/${this._result.documentType}.cshtml</code>, a partial view, or a layout used by that template.</span>
                     </div>
                 </div>
             `;
@@ -544,6 +741,36 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                 <div class="source-meta__row">
                     <span class="source-note source-note--muted">Source unknown — this block may be injected by an external tool, plugin, or script tag not tied to a Razor template.</span>
                 </div>
+            </div>
+        `;
+    }
+
+    private _renderRichResultSection(b: SchemaBlock) {
+        if (!b.richResultStatus || b.richResultStatus === 'unknown') return null;
+        const eligible = b.richResultStatus === 'eligible';
+        const docsUrl = RICH_RESULT_DOCS[b.type] ?? null;
+        const missing = b.richResultMissingFields ?? [];
+
+        return html`
+            <div class="rich-result-section rich-result-section--${b.richResultStatus}">
+                <div class="rich-result-header">
+                    <span class="rich-result-badge rich-result-badge--${b.richResultStatus}">
+                        ${eligible ? '✓' : '✗'} Google Rich Results
+                    </span>
+                    ${eligible
+                        ? html`<span class="rich-result-msg">This block meets Google's requirements for <strong>${b.type}</strong> rich results.</span>`
+                        : html`<span class="rich-result-msg">Missing <strong>${missing.length}</strong> required field${missing.length !== 1 ? 's' : ''} for Google rich results.</span>`}
+                    ${docsUrl
+                        ? html`<uui-button look="primary" href=${docsUrl} target="_blank" compact>
+                               <span class="btn-content">Google docs ${svgExternalLink}</span>
+                           </uui-button>`
+                        : null}
+                </div>
+                ${!eligible && missing.length
+                    ? html`<p class="rich-result-missing">
+                          Required: ${missing.map((f, i) => html`<code class="prop-name">${f}</code>${i < missing.length - 1 ? html`, ` : null}`)}
+                      </p>`
+                    : null}
             </div>
         `;
     }
@@ -615,6 +842,7 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                     ? null
                     : html`
                           ${this._renderSourceMeta(b)}
+                          ${this._renderRichResultSection(b)}
                           ${this._renderJsonBlock(b)}
                           ${b.errors.length
                               ? html`
@@ -745,26 +973,17 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
         const total = s.valid + s.invalid + s.warnings;
 
         return html`
-            ${this._result.url
-                ? html`
-                      <div class="result-toolbar">
-                          <uui-button
-                              look="outline"
-                              href=${this._result.url}
-                              target="_blank"
-                              title="Open the published page in a new tab"
-                          >
-                              <span class="btn-content"
-                                  >View page ${svgExternalLink}</span
-                              >
-                          </uui-button>
-                      </div>
-                  `
-                : null}
-
             ${this._renderSummary()}
 
+            ${duplicates.length > 0 ? html`
             <h4 class="section-heading">
+                <svg class="section-heading__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
+                    stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
+                    stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M8 8m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z" />
+                    <path d="M16 8v-2a2 2 0 0 0 -2 -2h-8a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h2" />
+                </svg>
                 Page schema data duplication
                 <span class="section-heading-count">
                     (
@@ -773,6 +992,7 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                     found)
                 </span>
             </h4>
+            ` : null}
 
             ${duplicates.length > 0
                 ? html`
@@ -805,6 +1025,14 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                 : null}
 
             <h4 class="section-heading">
+                <svg class="section-heading__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
+                    stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
+                    stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                    <path d="M7 8l-4 4l4 4" />
+                    <path d="M17 8l4 4l-4 4" />
+                    <path d="M14 4l-4 16" />
+                </svg>
                 Page schema data analysis
                 <span class="section-heading-count">
                     (
@@ -816,11 +1044,41 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
 
             ${this._result.summary.none
                 ? html`
-                      <uui-alert>
-                          No
-                          <code>application/ld+json</code>
-                          script blocks found on this page.
-                      </uui-alert>
+                      <uui-box headline="No schema markup found" class="no-schema-box">
+                          <p class="state-msg">
+                              No <code>application/ld+json</code> blocks were found on this page.
+                          </p>
+                          ${this._result.suggestedSchemaType ? html`
+                              <p class="state-hint suggestion-lead">
+                                  Based on the <strong>${this._result.documentType}</strong> document type,
+                                  we suggest adding a <strong>${this._result.suggestedSchemaType}</strong>
+                                  schema block. Here's a starting example:
+                              </p>
+                              <div class="json-viewer">
+                                  <div class="json-viewer__header">JSON — ${this._result.suggestedSchemaType} example</div>
+                                  <pre class="json-viewer__pre"><code class="json-viewer__code">${SCHEMA_EXAMPLES[this._result.suggestedSchemaType] ?? `{\n  "@context": "https://schema.org",\n  "@type": "${this._result.suggestedSchemaType}"\n}`}</code></pre>
+                              </div>
+                          ` : null}
+                      </uui-box>
+                      <uui-box headline="Configure schema type suggestions" class="no-schema-box">
+                          <p class="appsettings-tip__body">
+                              Add a <code>uSchema</code> section to your <code>appsettings.json</code>
+                              to enable suggestions. Keys are your Umbraco document type aliases;
+                              values are the schema.org types uSchema will recommend when a page of
+                              that type has no markup. The example below is illustrative — review your
+                              document type aliases carefully and ensure the schema types you assign are
+                              appropriate for the content before going live.
+                          </p>
+                          <div class="json-viewer">
+                              <div class="json-viewer__header">JSON (appsettings.json)</div>
+                              <pre class="json-viewer__pre"><code class="json-viewer__code">"uSchema": {
+  "DocumentTypeSchemaMap": {
+    "blogPost": "Article",   // document type alias → schema.org type
+    "product": "Product"
+  }
+}</code></pre>
+                          </div>
+                      </uui-box>
                   `
                 : null}
             ${filtered.length === 0 && this._activeFilter
@@ -858,13 +1116,11 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
             </div>
 
             <uui-box headline="Validate a page's schema">
-                <div class="picker-row">
-                    <div class="picker-input">
-                        <umb-input-document
-                            max="1"
-                            @change=${this._onPickerChange}
-                        ></umb-input-document>
-                    </div>
+                <umb-input-document
+                    max="1"
+                    @change=${this._onPickerChange}
+                ></umb-input-document>
+                <div class="picker-actions">
                     <uui-button
                         look="primary"
                         color="positive"
@@ -876,6 +1132,20 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
                             Validate ${svgRotateCw}
                         </span>
                     </uui-button>
+                    ${this._result?.url
+                        ? html`
+                              <uui-button
+                                  look="outline"
+                                  href=${this._result.url}
+                                  target="_blank"
+                                  title="Open the published page in a new tab"
+                              >
+                                  <span class="btn-content"
+                                      >View page ${svgExternalLink}</span
+                                  >
+                              </uui-button>
+                          `
+                        : null}
                 </div>
             </uui-box>
 
@@ -928,15 +1198,11 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
 
         /* ── Content picker ──────────────────────────────────────── */
 
-        .picker-row {
+        .picker-actions {
             display: flex;
-            gap: var(--uui-size-space-4);
-            align-items: center;
-            margin-top: var(--uui-size-space-4);
-        }
-
-        .picker-input {
-            flex: 1;
+            flex-direction: row;
+            gap: var(--uui-size-space-2);
+            margin-top: var(--uui-size-space-3);
         }
 
         /* ── Result state spacing ────────────────────────────────── */
@@ -951,24 +1217,104 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
             padding: var(--uui-size-layout-3);
         }
 
-        /* ── Summary row ─────────────────────────────────────────── */
+        /* ── Stat cards ─────────────────────────────────────────── */
 
-        .summary-row {
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: var(--uui-size-space-3);
+            margin-top: var(--uui-size-layout-1);
+            margin-bottom: var(--uui-size-space-4);
+        }
+
+        .stat-card {
+            position: relative;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: var(--uui-size-space-3);
+            padding: var(--uui-size-space-4);
+            border-radius: var(--uui-border-radius, 3px);
+            background: var(--uui-color-surface, #fff);
+            border: 1px solid var(--uui-color-border, #d8d7d9);
+            overflow: hidden;
+            transition: opacity 0.15s ease;
+        }
+
+        .stat-card--valid,
+        .stat-card--warning,
+        .stat-card--invalid {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .stat-card--valid:hover,
+        .stat-card--warning:hover,
+        .stat-card--invalid:hover {
+            border-color: var(--uui-color-border-emphasis, #a1a1aa);
+        }
+
+        .stat-card--dimmed { opacity: 0.4; }
+        .stat-card--active { border-width: 2px; }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+
+        .stat-card--valid::before    { background: #27ae60; }
+        .stat-card--warning::before  { background: #b7770d; }
+        .stat-card--invalid::before  { background: #c0392b; }
+        .stat-card--total::before    { background: #2471a3; }
+
+        .stat-card__icon {
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+        }
+
+        .stat-card__icon svg { width: 100%; height: 100%; }
+
+        .stat-card--valid .stat-card__icon    { color: #27ae60; }
+        .stat-card--warning .stat-card__icon  { color: #b7770d; }
+        .stat-card--invalid .stat-card__icon  { color: #c0392b; }
+        .stat-card--total .stat-card__icon    { color: #2471a3; }
+
+        .stat-card__info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-card__value {
+            font-size: 26px;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--uui-color-text, #1a1a1a);
+        }
+
+        .stat-card__label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--uui-color-text, #1a1a1a);
+            white-space: nowrap;
+        }
+
+        /* ── Filter row ──────────────────────────────────────────── */
+
+        .filter-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: var(--uui-size-space-4);
+            gap: var(--uui-size-space-3);
+            margin-bottom: var(--uui-size-layout-1);
             flex-wrap: wrap;
-            margin-bottom: var(--uui-size-space-3);
-            margin-top: var(--uui-size-layout-1);
+            min-height: 36px;
         }
 
-        .summary-filters {
-            display: flex;
-            align-items: center;
-            gap: var(--uui-size-space-4);
-            flex-wrap: wrap;
-        }
+        .filter-row__hint { flex: 1; }
 
         .summary-actions {
             display: flex;
@@ -977,43 +1323,10 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
             flex-wrap: wrap;
         }
 
-        .filter-tag {
-            cursor: pointer;
-            user-select: none;
-            transition: opacity 0.15s ease;
-        }
-
-        .filter-tag--dimmed {
-            opacity: 0.35;
-        }
-
-        .filter-tag--active {
-            opacity: 1;
-        }
-
         .filter-hint {
-            display: flex;
-            align-items: center;
-            gap: var(--uui-size-space-3);
-            margin: var(--uui-size-space-4) 0 var(--uui-size-layout-1);
-            padding: var(--uui-size-space-3) var(--uui-size-space-4);
-            border-radius: var(--uui-border-radius, 3px);
-            background: var(--uui-color-info-subtle, #eff6ff);
-            border: 1px solid var(--uui-color-info-emphasis, #93c5fd);
-            font-size: var(--uui-type-default-size, 14px);
-            color: var(--uui-color-text, #1f2937);
-        }
-
-        .filter-hint::before {
-            content: '';
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            flex-shrink: 0;
-            background: var(--uui-color-info, #3b82f6);
-            border-radius: 50%;
-            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' y1='8' x2='12' y2='12'/%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'/%3E%3C/svg%3E") center / contain no-repeat;
-            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' y1='8' x2='12' y2='12'/%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'/%3E%3C/svg%3E") center / contain no-repeat;
+            margin: 0;
+            font-size: var(--uui-type-default-size, 13px);
+            color: var(--uui-color-text-alt, #6b7280);
         }
 
         /* ── Block boxes ─────────────────────────────────────────── */
@@ -1216,10 +1529,23 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
             line-height: 1.5;
         }
 
-        .result-toolbar {
-            display: flex;
-            justify-content: flex-end;
-            margin: var(--uui-size-layout-1) 0 var(--uui-size-space-4);
+        /* ── Examples block ──────────────────────────────────────── */
+
+        .examples-block {
+            margin-top: var(--uui-size-space-5);
+        }
+
+        .examples-block__title {
+            display: block;
+            font-size: var(--uui-type-default-size, 13px);
+            color: var(--uui-color-text, #1a1a1a);
+            margin-bottom: var(--uui-size-space-1);
+        }
+
+        .examples-block__desc {
+            margin: 0 0 var(--uui-size-space-3);
+            font-size: var(--uui-type-default-size, 13px);
+            color: var(--uui-color-text-alt, #6b7280);
         }
 
         /* ── JSON viewer ─────────────────────────────────────────── */
@@ -1236,10 +1562,13 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
 
         .json-viewer__header {
             padding: 6px 12px;
-            background: #f3f3f5;
+            background: var(--uui-color-surface-alt, #f3f3f5);
             border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+            font-family: var(--uui-font-monospace, monospace);
             font-size: 12px;
-            font-weight: 400;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
             color: var(--uui-color-text-alt, #6b7280);
         }
 
@@ -1255,7 +1584,12 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
 
         .json-viewer__pre code {
             display: block;
-            padding: var(--uui-size-space-4) 0;
+            padding-top: var(--uui-size-space-4);
+            padding-bottom: var(--uui-size-space-4);
+        }
+
+        .json-viewer__code {
+            padding: var(--uui-size-space-4) 16px;
         }
 
         .jv-line {
@@ -1346,21 +1680,34 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
         /* ── Section heading ─────────────────────────────────────── */
 
         .section-heading {
-            margin: var(--uui-size-layout-1) 0 var(--uui-size-space-5);
-            font-size: var(--uui-type-small-size, 11px);
+            display: flex;
+            align-items: center;
+            gap: var(--uui-size-space-2);
+            margin: var(--uui-size-layout-1) 0 var(--uui-size-space-4);
+            font-size: 15px;
             font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--uui-color-text-alt, #6b7280);
+            text-transform: none;
+            letter-spacing: 0;
+            color: var(--uui-color-text, #1a1a1a);
             padding-bottom: var(--uui-size-space-3);
-            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            border-bottom: 2px solid var(--uui-color-border, #d8d7d9);
+        }
+
+        .section-heading__icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
         }
 
         .section-heading-count {
+            font-size: 13px;
             font-weight: 400;
-            text-transform: none;
-            letter-spacing: 0;
-            opacity: 0.7;
+            color: var(--uui-color-text-alt, #6b7280);
+            margin-left: 2px;
+        }
+
+        .no-schema-box {
+            margin-top: var(--uui-size-space-3);
         }
 
         /* ── Duplicate types card ────────────────────────────────── */
@@ -1388,6 +1735,90 @@ export class SchemaPreviewDashboardElement extends UmbElementMixin(LitElement) {
             align-self: center;
             flex-shrink: 0;
             margin-inline: var(--uui-size-space-3);
+        }
+
+        /* ── Rich Results section ────────────────────────────────── */
+
+        .rich-result-section {
+            display: flex;
+            flex-direction: column;
+            gap: var(--uui-size-space-3);
+            padding: var(--uui-size-space-4);
+            border-radius: var(--uui-border-radius, 3px);
+            margin-bottom: var(--uui-size-space-4);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .rich-result-section--eligible {
+            background: color-mix(in srgb, var(--uui-color-positive, #0a7a4e) 6%, transparent);
+            border-color: color-mix(in srgb, var(--uui-color-positive, #0a7a4e) 20%, transparent);
+        }
+
+        .rich-result-section--ineligible {
+            background: color-mix(in srgb, var(--uui-color-warning, #ffc600) 8%, transparent);
+            border-color: color-mix(in srgb, var(--uui-color-warning, #ffc600) 30%, transparent);
+        }
+
+        .rich-result-header {
+            display: flex;
+            align-items: center;
+            gap: var(--uui-size-space-3);
+            flex-wrap: wrap;
+        }
+
+        .rich-result-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 2px 7px;
+            border-radius: var(--uui-border-radius, 3px);
+            flex-shrink: 0;
+        }
+
+        .rich-result-badge--eligible {
+            background: color-mix(in srgb, var(--uui-color-positive, #0a7a4e) 15%, transparent);
+            color: var(--uui-color-positive, #0a7a4e);
+        }
+
+        .rich-result-badge--ineligible {
+            background: color-mix(in srgb, var(--uui-color-warning, #ffc600) 30%, transparent);
+            color: var(--uui-color-text, #1a1a1a);
+        }
+
+        .rich-result-msg {
+            font-size: var(--uui-type-default-size, 13px);
+            color: var(--uui-color-text-alt, #6b7280);
+            flex: 1;
+        }
+
+        .rich-result-missing {
+            margin: 0;
+            font-size: var(--uui-type-default-size, 13px);
+            color: var(--uui-color-text-alt, #6b7280);
+        }
+
+        /* ── Appsettings tip ─────────────────────────────────────── */
+
+        .appsettings-tip__body {
+            margin: 0 0 var(--uui-size-space-3);
+            font-size: var(--uui-type-default-size, 13px);
+            color: var(--uui-color-text-alt, #6b7280);
+        }
+
+        .appsettings-tip__pre {
+            margin: 0;
+            padding: var(--uui-size-space-4);
+            background: var(--uui-color-surface, white);
+            border: 1px solid rgba(0, 0, 0, 0.10);
+            border-radius: var(--uui-border-radius, 3px);
+            font-family: var(--uui-font-monospace, monospace);
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+            color: var(--uui-color-text, #1a1a1a);
         }
 
         /* ── Message items ───────────────────────────────────────── */

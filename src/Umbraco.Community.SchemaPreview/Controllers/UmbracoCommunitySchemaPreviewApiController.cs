@@ -4,10 +4,13 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Models.PublishedContent;
 using Umbraco.Cms.Core.PublishedCache;
 using Umbraco.Cms.Core.Routing;
+using Umbraco.Community.SchemaPreview.Models;
+using Umbraco.Community.SchemaPreview.Services;
 
 namespace Umbraco.Community.SchemaPreview.Controllers
 {
@@ -19,17 +22,23 @@ namespace Umbraco.Community.SchemaPreview.Controllers
         private readonly IPublishedUrlProvider _urlProvider;
         private readonly IHttpClientFactory _http;
         private readonly IWebHostEnvironment _env;
+        private readonly USchemaOptions _options;
+        private readonly ValidationHistoryService _history;
 
         public UmbracoCommunitySchemaPreviewApiController(
             ICacheManager cacheManager,
             IPublishedUrlProvider urlProvider,
             IHttpClientFactory http,
-            IWebHostEnvironment env)
+            IWebHostEnvironment env,
+            IOptions<USchemaOptions> options,
+            ValidationHistoryService history)
         {
             _cacheManager = cacheManager;
             _urlProvider = urlProvider;
             _http = http;
             _env = env;
+            _options = options.Value;
+            _history = history;
         }
 
         [HttpGet("ping")]
@@ -77,6 +86,7 @@ namespace Umbraco.Community.SchemaPreview.Controllers
                     url = (string?)null,
                     blocks = Array.Empty<object>(),
                     fetchError = diagnostic ?? "Content not found in the published cache.",
+                    suggestedSchemaType = (string?)null,
                     summary = new { valid = 0, invalid = 0, warnings = 0, none = true }
                 });
             }
@@ -92,13 +102,12 @@ namespace Umbraco.Community.SchemaPreview.Controllers
                     published = false,
                     url = (string?)null,
                     blocks = Array.Empty<object>(),
+                    suggestedSchemaType = (string?)null,
                     summary = new { valid = 0, invalid = 0, warnings = 0, none = true }
                 });
             }
 
             // In development, rewrite the URL host to match the current request.
-            // This ensures self-calls work even when a different hostname is configured in Umbraco
-            // (e.g. a production domain stored in Culture & Hostnames on a local test site).
             if (_env.IsDevelopment() && Uri.TryCreate(url, UriKind.Absolute, out var resolvedUri))
             {
                 var builder = new UriBuilder(resolvedUri)
@@ -123,6 +132,7 @@ namespace Umbraco.Community.SchemaPreview.Controllers
                     published = true,
                     fetchError = ex.Message,
                     blocks = Array.Empty<object>(),
+                    suggestedSchemaType = (string?)null,
                     summary = new { valid = 0, invalid = 0, warnings = 0, none = true }
                 });
             }
@@ -140,30 +150,96 @@ namespace Umbraco.Community.SchemaPreview.Controllers
             for (var i = 0; i < scripts.Length; i++)
             {
                 var raw = scripts[i].TextContent;
-                var (type, errors, warnings) = ValidateJsonLd(raw);
+                var result = ValidateJsonLd(raw);
                 var location = scripts[i].Closest("head") != null ? "head" : "body";
-                if (errors.Count > 0) invalid++;
-                else if (warnings.Count > 0) warn++;
+
+                if (result.Errors.Count > 0) invalid++;
+                else if (result.Warnings.Count > 0) warn++;
                 else valid++;
 
-                blocks.Add(new { index = i + 1, type, raw, errors, warnings, location });
+                blocks.Add(new
+                {
+                    index = i + 1,
+                    type = result.Type,
+                    raw,
+                    errors = result.Errors,
+                    warnings = result.Warnings,
+                    location,
+                    richResultStatus = result.RichResultStatus,
+                    richResultMissingFields = result.RichResultMissingFields
+                });
             }
 
-            return Ok(new
+            // Suggest a schema type if no blocks found and the document type is mapped
+            string? suggestedSchemaType = null;
+            if (scripts.Length == 0 && documentType != null)
+                _options.DocumentTypeSchemaMap.TryGetValue(documentType, out suggestedSchemaType);
+
+            var resultPayload = new
             {
                 url,
                 published = true,
                 documentType,
                 hasTemplate,
+                suggestedSchemaType,
                 blocks,
                 summary = new { valid, invalid, warnings = warn, none = scripts.Length == 0 }
-            });
+            };
+
+            _history.Record(content.Key, resultPayload, valid, warn, invalid);
+
+            return Ok(resultPayload);
         }
 
-        private static (string type, List<string> errors, List<string> warnings) ValidateJsonLd(string raw)
+        [HttpGet("validate/history/{key:guid}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public IActionResult GetHistory(Guid key)
+        {
+            var entries = _history.GetHistory(key);
+            var summaries = entries.Select((e, i) => new ValidationHistorySummary
+            {
+                Index         = i,
+                ScannedAt     = e.ScannedAt,
+                ValidBlocks   = e.ValidBlocks,
+                WarningBlocks = e.WarningBlocks,
+                InvalidBlocks = e.InvalidBlocks,
+                TotalBlocks   = e.TotalBlocks,
+                HasResult     = e.Result != null
+            });
+            return Ok(summaries);
+        }
+
+        [HttpGet("validate/history/{key:guid}/{index:int}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult GetHistoryEntry(Guid key, int index)
+        {
+            var entry = _history.GetEntry(key, index);
+            if (entry == null) return NotFound();
+            return Ok(entry.Result);
+        }
+
+        [HttpDelete("validate/history/{key:guid}/{index:int}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult DeleteHistoryEntry(Guid key, int index)
+        {
+            return _history.DeleteEntry(key, index) ? NoContent() : NotFound();
+        }
+
+        [HttpDelete("validate/history/{key:guid}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public IActionResult ClearHistory(Guid key)
+        {
+            _history.ClearHistory(key);
+            return NoContent();
+        }
+
+        private static ValidationData ValidateJsonLd(string raw)
         {
             var errors = new List<string>();
             var warnings = new List<string>();
+
             try
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(raw);
@@ -228,13 +304,135 @@ namespace Umbraco.Community.SchemaPreview.Controllers
                     case "ClaimReview": MustHave("claimReviewed", "reviewRating", "url"); break;
                 }
 
-                return (type, errors, warnings);
+                var (richStatus, richMissing) = CheckRichResults(type, target);
+                return new ValidationData(type, errors, warnings, richStatus, richMissing);
             }
             catch (Exception ex)
             {
                 errors.Add($"JSON parse error: {ex.Message}");
-                return ("Invalid JSON", errors, warnings);
+                return new ValidationData("Invalid JSON", errors, warnings, "unknown", new List<string>());
             }
         }
+
+        /// <summary>
+        /// Checks whether a schema block meets Google's specific requirements for Rich Results.
+        /// Returns "eligible", "ineligible", or "unknown" (type not tracked).
+        /// </summary>
+        private static (string status, List<string> missing) CheckRichResults(
+            string type, System.Text.Json.JsonElement target)
+        {
+            var missing = new List<string>();
+            bool Has(string prop) => target.TryGetProperty(prop, out _);
+
+            switch (type)
+            {
+                case "Article":
+                case "NewsArticle":
+                case "BlogPosting":
+                    if (!Has("headline")) missing.Add("headline");
+                    if (!Has("author")) missing.Add("author");
+                    if (!Has("datePublished")) missing.Add("datePublished");
+                    if (!Has("image")) missing.Add("image");
+                    break;
+
+                case "BreadcrumbList":
+                    if (!Has("itemListElement")) missing.Add("itemListElement");
+                    break;
+
+                case "FAQPage":
+                    if (!Has("mainEntity")) missing.Add("mainEntity");
+                    break;
+
+                case "HowTo":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("step")) missing.Add("step");
+                    break;
+
+                case "JobPosting":
+                    if (!Has("title")) missing.Add("title");
+                    if (!Has("description")) missing.Add("description");
+                    if (!Has("datePosted")) missing.Add("datePosted");
+                    if (!Has("hiringOrganization")) missing.Add("hiringOrganization");
+                    if (!Has("jobLocation")) missing.Add("jobLocation");
+                    break;
+
+                case "LocalBusiness":
+                case "Restaurant":
+                case "Store":
+                case "Hotel":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("address")) missing.Add("address");
+                    break;
+
+                case "Product":
+                    if (!Has("name")) missing.Add("name");
+                    // Google requires at least one of: offers, aggregateRating, or review
+                    if (!Has("offers") && !Has("aggregateRating") && !Has("review"))
+                        missing.Add("offers (or aggregateRating / review)");
+                    break;
+
+                case "Recipe":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("image")) missing.Add("image");
+                    if (!Has("recipeIngredient")) missing.Add("recipeIngredient");
+                    if (!Has("recipeInstructions")) missing.Add("recipeInstructions");
+                    break;
+
+                case "Review":
+                case "AggregateRating":
+                    if (!Has("itemReviewed")) missing.Add("itemReviewed");
+                    if (!Has("ratingValue")) missing.Add("ratingValue");
+                    break;
+
+                case "VideoObject":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("description")) missing.Add("description");
+                    if (!Has("thumbnailUrl")) missing.Add("thumbnailUrl");
+                    if (!Has("uploadDate")) missing.Add("uploadDate");
+                    break;
+
+                case "Event":
+                case "SportsEvent":
+                case "MusicEvent":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("startDate")) missing.Add("startDate");
+                    if (!Has("location")) missing.Add("location");
+                    break;
+
+                case "Course":
+                case "EducationalOccupationalProgram":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("description")) missing.Add("description");
+                    if (!Has("provider")) missing.Add("provider");
+                    break;
+
+                case "Movie":
+                    if (!Has("name")) missing.Add("name");
+                    break;
+
+                case "Dataset":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("description")) missing.Add("description");
+                    break;
+
+                case "SoftwareApplication":
+                    if (!Has("name")) missing.Add("name");
+                    if (!Has("operatingSystem")) missing.Add("operatingSystem");
+                    if (!Has("applicationCategory")) missing.Add("applicationCategory");
+                    break;
+
+                default:
+                    return ("unknown", missing);
+            }
+
+            return (missing.Count == 0 ? "eligible" : "ineligible", missing);
+        }
+
+        private record ValidationData(
+            string Type,
+            List<string> Errors,
+            List<string> Warnings,
+            string RichResultStatus,
+            List<string> RichResultMissingFields);
     }
 }

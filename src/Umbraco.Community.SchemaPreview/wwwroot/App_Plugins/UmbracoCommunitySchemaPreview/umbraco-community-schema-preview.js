@@ -1,6 +1,6 @@
 const a = [
   {
-    name: "Umbraco Community Schema Preview Entrypoint",
+    name: "uSchema Entrypoint",
     alias: "Umbraco.Community.SchemaPreview.Entrypoint",
     type: "backofficeEntryPoint",
     js: () => import("./entrypoint-1dwyYRGg.js")
@@ -10,7 +10,7 @@ const a = [
     name: "uSchema Dashboard",
     alias: "Umbraco.Community.SchemaPreview.Dashboard",
     type: "dashboard",
-    js: () => import("./dashboard.element-C2oTilM4.js"),
+    js: () => import("./dashboard.element-Cg5T1gJD.js"),
     meta: {
       label: "uSchema",
       pathname: "uschema"
@@ -22,17 +22,17 @@ const a = [
       }
     ]
   }
-], t = [
+], i = [
   {
     name: "uSchema Workspace View",
     alias: "Umbraco.Community.SchemaPreview.WorkspaceView",
     type: "workspaceView",
-    js: () => import("./workspace-view.element-C22K5cJ2.js"),
+    js: () => import("./workspace-view.element-CoKGcpq7.js"),
     weight: 90,
     meta: {
       label: "uSchema",
       pathname: "uschema",
-      icon: "icon-settings-alt"
+      icon: "icon-search"
     },
     conditions: [
       {
@@ -41,12 +41,12 @@ const a = [
       }
     ]
   }
-], i = [
+], m = [
   ...a,
   ...e,
-  ...t
+  ...i
 ];
 export {
-  i as manifests
+  m as manifests
 };
 //# sourceMappingURL=umbraco-community-schema-preview.js.map

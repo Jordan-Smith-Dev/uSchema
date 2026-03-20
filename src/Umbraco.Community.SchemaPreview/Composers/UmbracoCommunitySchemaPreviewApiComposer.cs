@@ -18,6 +18,9 @@ namespace Umbraco.Community.SchemaPreview.Composers
     {
         public void Compose(IUmbracoBuilder builder)
         {
+            builder.Services.Configure<USchemaOptions>(builder.Config.GetSection("uSchema"));
+            builder.Services.AddSingleton<Services.ValidationHistoryService>();
+
             builder.Services.AddHttpClient(Constants.HttpClientName)
                 .ConfigurePrimaryHttpMessageHandler(sp =>
                 {

@@ -1,82 +1,28 @@
-import {
-    LitElement,
-    css,
-    html,
-    customElement,
-    state
-} from '@umbraco-cms/backoffice/external/lit';
-import { UmbElementMixin } from '@umbraco-cms/backoffice/element-api';
-import { UMB_DOCUMENT_WORKSPACE_CONTEXT } from '@umbraco-cms/backoffice/document';
-import { UMB_AUTH_CONTEXT } from '@umbraco-cms/backoffice/auth';
-import { UMB_NOTIFICATION_CONTEXT } from '@umbraco-cms/backoffice/notification';
-
-type SchemaBlock = {
-    index: number;
-    type: string;
-    raw: string;
-    errors: string[];
-    warnings: string[];
-    location?: 'head' | 'body';
-    richResultStatus?: 'eligible' | 'ineligible' | 'unknown';
-    richResultMissingFields?: string[];
+import { LitElement as x, html as a, css as y, state as u, customElement as _ } from "@umbraco-cms/backoffice/external/lit";
+import { UmbElementMixin as w } from "@umbraco-cms/backoffice/element-api";
+import { UMB_DOCUMENT_WORKSPACE_CONTEXT as k } from "@umbraco-cms/backoffice/document";
+import { UMB_AUTH_CONTEXT as $ } from "@umbraco-cms/backoffice/auth";
+import { UMB_NOTIFICATION_CONTEXT as z } from "@umbraco-cms/backoffice/notification";
+var S = Object.defineProperty, j = Object.getOwnPropertyDescriptor, d = (e, t, o, r) => {
+  for (var s = r > 1 ? void 0 : r ? j(t, o) : t, i = e.length - 1, n; i >= 0; i--)
+    (n = e[i]) && (s = (r ? n(t, o, s) : n(s)) || s);
+  return r && s && S(t, o, s), s;
 };
-
-type ValidationResult = {
-    url?: string;
-    published: boolean;
-    documentType?: string;
-    hasTemplate?: boolean;
-    suggestedSchemaType?: string;
-    blocks: SchemaBlock[];
-    summary: {
-        valid: number;
-        invalid: number;
-        warnings: number;
-        none: boolean;
-    };
-    fetchError?: string;
-};
-
-type FilterState = 'valid' | 'warning' | 'invalid' | null;
-
-type ValidationHistorySummary = {
-    index: number;
-    scannedAt: string;
-    validBlocks: number;
-    warningBlocks: number;
-    invalidBlocks: number;
-    totalBlocks: number;
-    hasResult: boolean;
-};
-
-type EnrichedMessage = {
-    title: unknown;
-    detail: unknown;
-    propertyName?: string;
-    example?: string;
-    docsUrl?: string;
-};
-
-function enrichMessage(raw: string): EnrichedMessage {
-    if (raw === 'Missing @context') {
-        return {
-            title: html`
+function E(e) {
+  return e === "Missing @context" ? {
+    title: a`
                 Missing
                 <code class="prop-name">@context</code>
             `,
-            detail: 'Every JSON-LD block must declare a context so search engines know how to interpret the properties.',
-            example: '"@context": "https://schema.org"',
-            docsUrl: 'https://schema.org/docs/gs1.html'
-        };
-    }
-
-    if (raw === 'Missing @type') {
-        return {
-            title: html`
+    detail: "Every JSON-LD block must declare a context so search engines know how to interpret the properties.",
+    example: '"@context": "https://schema.org"',
+    docsUrl: "https://schema.org/docs/gs1.html"
+  } : e === "Missing @type" ? {
+    title: a`
                 Missing
                 <code class="prop-name">@type</code>
             `,
-            detail: html`
+    detail: a`
                 The
                 <code class="prop-name">@type</code>
                 property tells search engines what kind of entity this block
@@ -88,99 +34,85 @@ function enrichMessage(raw: string): EnrichedMessage {
                 <code class="prop-name">Organization</code>
                 ).
             `,
-            example: '"@type": "WebPage"',
-            docsUrl: 'https://schema.org/docs/gs1.html'
-        };
-    }
-
-    if (raw.startsWith('JSON parse error:')) {
-        return {
-            title: 'Invalid JSON — block cannot be parsed',
-            detail: `This block contains malformed JSON. Fix the syntax error and re-validate. Parser said: ${raw.replace('JSON parse error: ', '')}`,
-            docsUrl: 'https://jsonlint.com'
-        };
-    }
-
-    const known: Record<string, EnrichedMessage> = {
-        'Recommended: headline': {
-            title: 'is recommended',
-            propertyName: 'headline',
-            detail: 'A concise title for the article (max 110 characters). Required by Google to be eligible for Article rich results in Search.',
-            example: '"headline": "5 Ways to Improve Your SEO in 2024"',
-            docsUrl:
-                'https://developers.google.com/search/docs/appearance/structured-data/article'
-        },
-        'Recommended: datePublished': {
-            title: 'is recommended',
-            propertyName: 'datePublished',
-            detail: 'The date the content was first published, in ISO 8601 format. Helps search engines surface timely and recently updated content.',
-            example: '"datePublished": "2024-01-15T09:00:00+00:00"',
-            docsUrl: 'https://schema.org/datePublished'
-        },
-        'Recommended: author': {
-            title: 'is recommended',
-            propertyName: 'author',
-            detail: 'Identifies who created the content. Strengthens E-E-A-T (Experience, Expertise, Authority, Trust) signals that Google uses when ranking content.',
-            example:
-                '"author": { "@type": "Person", "name": "Jane Doe", "url": "https://example.com/team/jane" }',
-            docsUrl: 'https://schema.org/author'
-        },
-        'Recommended: image': {
-            title: 'is recommended',
-            propertyName: 'image',
-            detail: 'A representative image for the article. Google requires at least one image to show Article rich results — without it the block may be ignored.',
-            example: '"image": "https://example.com/images/article-cover.jpg"',
-            docsUrl:
-                'https://developers.google.com/search/docs/appearance/structured-data/article#article-properties'
-        },
-        'Recommended: name': {
-            title: 'is recommended',
-            propertyName: 'name',
-            detail: 'The name or title of this entity. Required for most rich result types and used by search engines to label the entity in knowledge panels.',
-            example: '"name": "Acme Corporation"',
-            docsUrl: 'https://schema.org/name'
-        },
-        'Recommended: url': {
-            title: 'is recommended',
-            propertyName: 'url',
-            detail: 'The canonical URL of this entity or page. Helps search engines identify the definitive location and avoid treating it as a duplicate.',
-            example: '"url": "https://www.example.com"',
-            docsUrl: 'https://schema.org/url'
-        },
-        'Recommended: logo': {
-            title: 'is recommended',
-            propertyName: 'logo',
-            detail: "The organisation's logo image. Used by Google for Knowledge Panels, Sitelinks, and other rich results. Prefer a wide, rectangular image.",
-            example:
-                '"logo": { "@type": "ImageObject", "url": "https://example.com/logo.png", "width": 200, "height": 60 }',
-            docsUrl:
-                'https://developers.google.com/search/docs/appearance/structured-data/organization#logo'
-        },
-        'Recommended: itemListElement': {
-            title: html`
+    example: '"@type": "WebPage"',
+    docsUrl: "https://schema.org/docs/gs1.html"
+  } : e.startsWith("JSON parse error:") ? {
+    title: "Invalid JSON — block cannot be parsed",
+    detail: `This block contains malformed JSON. Fix the syntax error and re-validate. Parser said: ${e.replace("JSON parse error: ", "")}`,
+    docsUrl: "https://jsonlint.com"
+  } : {
+    "Recommended: headline": {
+      title: "is recommended",
+      propertyName: "headline",
+      detail: "A concise title for the article (max 110 characters). Required by Google to be eligible for Article rich results in Search.",
+      example: '"headline": "5 Ways to Improve Your SEO in 2024"',
+      docsUrl: "https://developers.google.com/search/docs/appearance/structured-data/article"
+    },
+    "Recommended: datePublished": {
+      title: "is recommended",
+      propertyName: "datePublished",
+      detail: "The date the content was first published, in ISO 8601 format. Helps search engines surface timely and recently updated content.",
+      example: '"datePublished": "2024-01-15T09:00:00+00:00"',
+      docsUrl: "https://schema.org/datePublished"
+    },
+    "Recommended: author": {
+      title: "is recommended",
+      propertyName: "author",
+      detail: "Identifies who created the content. Strengthens E-E-A-T (Experience, Expertise, Authority, Trust) signals that Google uses when ranking content.",
+      example: '"author": { "@type": "Person", "name": "Jane Doe", "url": "https://example.com/team/jane" }',
+      docsUrl: "https://schema.org/author"
+    },
+    "Recommended: image": {
+      title: "is recommended",
+      propertyName: "image",
+      detail: "A representative image for the article. Google requires at least one image to show Article rich results — without it the block may be ignored.",
+      example: '"image": "https://example.com/images/article-cover.jpg"',
+      docsUrl: "https://developers.google.com/search/docs/appearance/structured-data/article#article-properties"
+    },
+    "Recommended: name": {
+      title: "is recommended",
+      propertyName: "name",
+      detail: "The name or title of this entity. Required for most rich result types and used by search engines to label the entity in knowledge panels.",
+      example: '"name": "Acme Corporation"',
+      docsUrl: "https://schema.org/name"
+    },
+    "Recommended: url": {
+      title: "is recommended",
+      propertyName: "url",
+      detail: "The canonical URL of this entity or page. Helps search engines identify the definitive location and avoid treating it as a duplicate.",
+      example: '"url": "https://www.example.com"',
+      docsUrl: "https://schema.org/url"
+    },
+    "Recommended: logo": {
+      title: "is recommended",
+      propertyName: "logo",
+      detail: "The organisation's logo image. Used by Google for Knowledge Panels, Sitelinks, and other rich results. Prefer a wide, rectangular image.",
+      example: '"logo": { "@type": "ImageObject", "url": "https://example.com/logo.png", "width": 200, "height": 60 }',
+      docsUrl: "https://developers.google.com/search/docs/appearance/structured-data/organization#logo"
+    },
+    "Recommended: itemListElement": {
+      title: a`
                 is required for
                 <code class="prop-name">BreadcrumbList</code>
             `,
-            propertyName: 'itemListElement',
-            detail: html`
+      propertyName: "itemListElement",
+      detail: a`
                 An ordered array of
                 <code class="prop-name">ListItem</code>
                 entries that make up the breadcrumb trail. Without this the
                 <code class="prop-name">BreadcrumbList</code>
                 block is empty and search engines will ignore it.
             `,
-            example:
-                '"itemListElement": [{ "@type": "ListItem", "position": 1, "name": "Home", "item": "https://example.com" }]',
-            docsUrl:
-                'https://developers.google.com/search/docs/appearance/structured-data/breadcrumb'
-        },
-        'Recommended: mainEntity': {
-            title: html`
+      example: '"itemListElement": [{ "@type": "ListItem", "position": 1, "name": "Home", "item": "https://example.com" }]',
+      docsUrl: "https://developers.google.com/search/docs/appearance/structured-data/breadcrumb"
+    },
+    "Recommended: mainEntity": {
+      title: a`
                 is required for
                 <code class="prop-name">FAQPage</code>
             `,
-            propertyName: 'mainEntity',
-            detail: html`
+      propertyName: "mainEntity",
+      detail: a`
                 An array of
                 <code class="prop-name">Question</code>
                 entities. Without this an
@@ -188,20 +120,13 @@ function enrichMessage(raw: string): EnrichedMessage {
                 block has no questions to display and will not generate FAQ rich
                 results in Search.
             `,
-            example:
-                '"mainEntity": [{ "@type": "Question", "name": "What is schema.org?", "acceptedAnswer": { "@type": "Answer", "text": "A vocabulary for structured data on the web." } }]',
-            docsUrl:
-                'https://developers.google.com/search/docs/appearance/structured-data/faqpage'
-        }
-    };
-
-    return known[raw] ?? { title: raw, detail: '' };
+      example: '"mainEntity": [{ "@type": "Question", "name": "What is schema.org?", "acceptedAnswer": { "@type": "Answer", "text": "A vocabulary for structured data on the web." } }]',
+      docsUrl: "https://developers.google.com/search/docs/appearance/structured-data/faqpage"
+    }
+  }[e] ?? { title: e, detail: "" };
 }
-
-const API_BASE = '/umbraco/umbracocommunityschemapreview/api/v1';
-
-const SCHEMA_EXAMPLES: Record<string, string> = {
-    Article: `{
+const g = "/umbraco/umbracocommunityschemapreview/api/v1", P = {
+  Article: `{
   "@context": "https://schema.org",
   "@type": "Article",
   "headline": "Your article headline",
@@ -209,7 +134,7 @@ const SCHEMA_EXAMPLES: Record<string, string> = {
   "author": { "@type": "Person", "name": "Author Name" },
   "image": "https://example.com/article-image.jpg"
 }`,
-    BlogPosting: `{
+  BlogPosting: `{
   "@context": "https://schema.org",
   "@type": "BlogPosting",
   "headline": "Your blog post title",
@@ -217,7 +142,7 @@ const SCHEMA_EXAMPLES: Record<string, string> = {
   "author": { "@type": "Person", "name": "Author Name" },
   "image": "https://example.com/blog-image.jpg"
 }`,
-    Product: `{
+  Product: `{
   "@context": "https://schema.org",
   "@type": "Product",
   "name": "Product Name",
@@ -229,13 +154,13 @@ const SCHEMA_EXAMPLES: Record<string, string> = {
     "availability": "https://schema.org/InStock"
   }
 }`,
-    WebPage: `{
+  WebPage: `{
   "@context": "https://schema.org",
   "@type": "WebPage",
   "name": "Page Title",
   "url": "https://example.com/page"
 }`,
-    Event: `{
+  Event: `{
   "@context": "https://schema.org",
   "@type": "Event",
   "name": "Event Name",
@@ -246,7 +171,7 @@ const SCHEMA_EXAMPLES: Record<string, string> = {
     "address": "123 Example Street, London"
   }
 }`,
-    LocalBusiness: `{
+  LocalBusiness: `{
   "@context": "https://schema.org",
   "@type": "LocalBusiness",
   "name": "Business Name",
@@ -257,26 +182,26 @@ const SCHEMA_EXAMPLES: Record<string, string> = {
   },
   "telephone": "+44 20 1234 5678"
 }`,
-    Organization: `{
+  Organization: `{
   "@context": "https://schema.org",
   "@type": "Organization",
   "name": "Organisation Name",
   "url": "https://example.com",
   "logo": "https://example.com/logo.png"
 }`,
-    Person: `{
+  Person: `{
   "@context": "https://schema.org",
   "@type": "Person",
   "name": "Full Name",
   "url": "https://example.com/author/full-name"
 }`,
-    Author: `{
+  Author: `{
   "@context": "https://schema.org",
   "@type": "Person",
   "name": "Full Name",
   "url": "https://example.com/author/full-name"
 }`,
-    FAQPage: `{
+  FAQPage: `{
   "@context": "https://schema.org",
   "@type": "FAQPage",
   "mainEntity": [
@@ -290,14 +215,14 @@ const SCHEMA_EXAMPLES: Record<string, string> = {
     }
   ]
 }`,
-    Recipe: `{
+  Recipe: `{
   "@context": "https://schema.org",
   "@type": "Recipe",
   "name": "Recipe Name",
   "recipeIngredient": ["1 cup flour", "2 eggs"],
   "recipeInstructions": "Step-by-step instructions here."
 }`,
-    JobPosting: `{
+  JobPosting: `{
   "@context": "https://schema.org",
   "@type": "JobPosting",
   "title": "Job Title",
@@ -309,17 +234,15 @@ const SCHEMA_EXAMPLES: Record<string, string> = {
     "address": { "@type": "PostalAddress", "addressLocality": "London" }
   }
 }`,
-    VideoObject: `{
+  VideoObject: `{
   "@context": "https://schema.org",
   "@type": "VideoObject",
   "name": "Video Title",
   "description": "A short description of the video.",
   "thumbnailUrl": "https://example.com/thumbnail.jpg",
   "uploadDate": "2024-01-15"
-}`,
-};
-
-const svgRotateCw = html`
+}`
+}, f = a`
     <svg
         class="btn-icon"
         xmlns="http://www.w3.org/2000/svg"
@@ -333,9 +256,7 @@ const svgRotateCw = html`
         <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
         <path d="M21 3v5h-5"></path>
     </svg>
-`;
-
-const svgExternalLink = html`
+`, p = a`
     <svg
         class="btn-icon"
         xmlns="http://www.w3.org/2000/svg"
@@ -350,11 +271,9 @@ const svgExternalLink = html`
             d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
         ></path>
     </svg>
-`;
-
-const svgChevron = (up: boolean) => html`
+`, m = (e) => a`
     <svg
-        class="btn-icon${up ? ' btn-icon--up' : ''}"
+        class="btn-icon${e ? " btn-icon--up" : ""}"
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
         fill="none"
@@ -365,377 +284,249 @@ const svgChevron = (up: boolean) => html`
     >
         <path d="m4 9 8 8 8-8"></path>
     </svg>
-`;
-
-const svgStatValid = html`
+`, A = a`
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
         stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24">
         <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
         <path d="m9 12 2 2 4-4"/>
     </svg>
-`;
-
-const svgStatWarning = html`
+`, C = a`
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
         stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24">
         <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
         <path d="M12 9v4"/><path d="M12 17h.01"/>
     </svg>
-`;
-
-const svgStatInvalid = html`
+`, B = a`
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
         stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="10"/>
         <path d="m15 9-6 6"/><path d="m9 9 6 6"/>
     </svg>
-`;
-
-const svgStatBlocks = html`
+`, R = a`
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor"
         stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" viewBox="0 0 24 24">
         <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
         <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
     </svg>
-`;
-
-const RICH_RESULT_DOCS: Record<string, string> = {
-    Article: 'https://developers.google.com/search/docs/appearance/structured-data/article',
-    NewsArticle: 'https://developers.google.com/search/docs/appearance/structured-data/article',
-    BlogPosting: 'https://developers.google.com/search/docs/appearance/structured-data/article',
-    BreadcrumbList: 'https://developers.google.com/search/docs/appearance/structured-data/breadcrumb',
-    FAQPage: 'https://developers.google.com/search/docs/appearance/structured-data/faqpage',
-    HowTo: 'https://developers.google.com/search/docs/appearance/structured-data/how-to',
-    JobPosting: 'https://developers.google.com/search/docs/appearance/structured-data/job-posting',
-    LocalBusiness: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
-    Restaurant: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
-    Store: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
-    Hotel: 'https://developers.google.com/search/docs/appearance/structured-data/local-business',
-    Product: 'https://developers.google.com/search/docs/appearance/structured-data/product',
-    Recipe: 'https://developers.google.com/search/docs/appearance/structured-data/recipe',
-    Review: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
-    AggregateRating: 'https://developers.google.com/search/docs/appearance/structured-data/review-snippet',
-    VideoObject: 'https://developers.google.com/search/docs/appearance/structured-data/video',
-    Event: 'https://developers.google.com/search/docs/appearance/structured-data/event',
-    SportsEvent: 'https://developers.google.com/search/docs/appearance/structured-data/event',
-    MusicEvent: 'https://developers.google.com/search/docs/appearance/structured-data/event',
-    Course: 'https://developers.google.com/search/docs/appearance/structured-data/course',
-    Movie: 'https://developers.google.com/search/docs/appearance/structured-data/movie',
-    Dataset: 'https://developers.google.com/search/docs/appearance/structured-data/dataset',
-    SoftwareApplication: 'https://developers.google.com/search/docs/appearance/structured-data/software-app',
+`, T = {
+  Article: "https://developers.google.com/search/docs/appearance/structured-data/article",
+  NewsArticle: "https://developers.google.com/search/docs/appearance/structured-data/article",
+  BlogPosting: "https://developers.google.com/search/docs/appearance/structured-data/article",
+  BreadcrumbList: "https://developers.google.com/search/docs/appearance/structured-data/breadcrumb",
+  FAQPage: "https://developers.google.com/search/docs/appearance/structured-data/faqpage",
+  HowTo: "https://developers.google.com/search/docs/appearance/structured-data/how-to",
+  JobPosting: "https://developers.google.com/search/docs/appearance/structured-data/job-posting",
+  LocalBusiness: "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+  Restaurant: "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+  Store: "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+  Hotel: "https://developers.google.com/search/docs/appearance/structured-data/local-business",
+  Product: "https://developers.google.com/search/docs/appearance/structured-data/product",
+  Recipe: "https://developers.google.com/search/docs/appearance/structured-data/recipe",
+  Review: "https://developers.google.com/search/docs/appearance/structured-data/review-snippet",
+  AggregateRating: "https://developers.google.com/search/docs/appearance/structured-data/review-snippet",
+  VideoObject: "https://developers.google.com/search/docs/appearance/structured-data/video",
+  Event: "https://developers.google.com/search/docs/appearance/structured-data/event",
+  SportsEvent: "https://developers.google.com/search/docs/appearance/structured-data/event",
+  MusicEvent: "https://developers.google.com/search/docs/appearance/structured-data/event",
+  Course: "https://developers.google.com/search/docs/appearance/structured-data/course",
+  Movie: "https://developers.google.com/search/docs/appearance/structured-data/movie",
+  Dataset: "https://developers.google.com/search/docs/appearance/structured-data/dataset",
+  SoftwareApplication: "https://developers.google.com/search/docs/appearance/structured-data/software-app"
 };
-
-@customElement('schema-preview-workspace-view')
-export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
-    @state() private _loading = true;
-    @state() private _result: ValidationResult | null = null;
-    @state() private _error: string | null = null;
-    @state() private _activeFilter: FilterState = null;
-    @state() private _collapsedBlocks = new Set<number>();
-    @state() private _history: ValidationHistorySummary[] = [];
-    @state() private _historyExpanded = false;
-    @state() private _historyLoading: number | null = null;
-    @state() private _historicalIndex: number | null = null;
-
-    private _unique: string | null = null;
-    private _tokenProvider?: () => string | Promise<string>;
-    private _notificationContext?: {
-        peek(
-            color: 'positive' | 'warning' | 'danger',
-            options: { data: { headline: string; message: string } }
-        ): void;
-    };
-
-    override connectedCallback() {
-        super.connectedCallback();
-
-        this.consumeContext(UMB_AUTH_CONTEXT, (authContext) => {
-            this._tokenProvider = authContext?.getOpenApiConfiguration().token;
-        });
-
-        this.consumeContext(UMB_NOTIFICATION_CONTEXT, (ctx) => {
-            this._notificationContext = ctx;
-        });
-
-        this.consumeContext(UMB_DOCUMENT_WORKSPACE_CONTEXT, async (ctx) => {
-            const unique = ctx?.getUnique?.();
-            if (!unique) {
-                this._error = 'Could not determine content key from workspace.';
-                this._loading = false;
-                return;
-            }
-            this._unique = unique;
-            await this._validate(unique);
-            void this._fetchHistory(unique);
-        });
-    }
-
-    private async _validate(unique: string) {
-        this._loading = true;
-        this._error = null;
-        this._result = null;
-        this._activeFilter = null;
-        this._collapsedBlocks = new Set();
-        this._historicalIndex = null;
-
-        try {
-            const token = this._tokenProvider
-                ? await this._tokenProvider()
-                : undefined;
-            const res = await fetch(`${API_BASE}/validate/key/${unique}`, {
-                headers: {
-                    Accept: 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {})
-                }
-            });
-
-            if (!res.ok) {
-                throw new Error(
-                    `Validation request failed: ${res.status} ${res.statusText}`
-                );
-            }
-
-            this._result = await res.json();
-            if (this._result) this._notifyResult(this._result);
-            void this._fetchHistory(unique);
-        } catch (e: unknown) {
-            this._error =
-                e instanceof Error
-                    ? e.message
-                    : 'An unexpected error occurred.';
-        } finally {
-            this._loading = false;
+let l = class extends w(x) {
+  constructor() {
+    super(...arguments), this._loading = !0, this._result = null, this._error = null, this._activeFilter = null, this._collapsedBlocks = /* @__PURE__ */ new Set(), this._history = [], this._historyExpanded = !1, this._historyLoading = null, this._historicalIndex = null, this._unique = null;
+  }
+  connectedCallback() {
+    super.connectedCallback(), this.consumeContext($, (e) => {
+      this._tokenProvider = e == null ? void 0 : e.getOpenApiConfiguration().token;
+    }), this.consumeContext(z, (e) => {
+      this._notificationContext = e;
+    }), this.consumeContext(k, async (e) => {
+      var o;
+      const t = (o = e == null ? void 0 : e.getUnique) == null ? void 0 : o.call(e);
+      if (!t) {
+        this._error = "Could not determine content key from workspace.", this._loading = !1;
+        return;
+      }
+      this._unique = t, await this._validate(t), this._fetchHistory(t);
+    });
+  }
+  async _validate(e) {
+    this._loading = !0, this._error = null, this._result = null, this._activeFilter = null, this._collapsedBlocks = /* @__PURE__ */ new Set(), this._historicalIndex = null;
+    try {
+      const t = this._tokenProvider ? await this._tokenProvider() : void 0, o = await fetch(`${g}/validate/key/${e}`, {
+        headers: {
+          Accept: "application/json",
+          ...t ? { Authorization: `Bearer ${t}` } : {}
         }
-    }
-
-    private async _fetchHistory(unique: string) {
-        try {
-            const token = this._tokenProvider ? await this._tokenProvider() : undefined;
-            const res = await fetch(`${API_BASE}/validate/history/${unique}`, {
-                headers: {
-                    Accept: 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {})
-                }
-            });
-            if (res.ok) this._history = await res.json();
-        } catch {
-            // non-critical — history is optional
-        }
-    }
-
-    private async _loadHistoryEntry(unique: string, index: number) {
-        this._historyLoading = index;
-        try {
-            const token = this._tokenProvider ? await this._tokenProvider() : undefined;
-            const res = await fetch(`${API_BASE}/validate/history/${unique}/${index}`, {
-                headers: {
-                    Accept: 'application/json',
-                    ...(token ? { Authorization: `Bearer ${token}` } : {})
-                }
-            });
-            if (res.ok) {
-                this._result = await res.json();
-                this._historicalIndex = index;
-                this._activeFilter = null;
-                this._collapsedBlocks = new Set();
-            }
-        } catch {
-            // ignore
-        } finally {
-            this._historyLoading = null;
-        }
-    }
-
-    private async _deleteHistoryEntry(unique: string, index: number) {
-        try {
-            const token = this._tokenProvider ? await this._tokenProvider() : undefined;
-            await fetch(`${API_BASE}/validate/history/${unique}/${index}`, {
-                method: 'DELETE',
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-            if (this._historicalIndex === index) {
-                this._historicalIndex = null;
-                this._result = null;
-            }
-            void this._fetchHistory(unique);
-        } catch {
-            // ignore
-        }
-    }
-
-    private async _clearHistory(unique: string) {
-        try {
-            const token = this._tokenProvider ? await this._tokenProvider() : undefined;
-            await fetch(`${API_BASE}/validate/history/${unique}`, {
-                method: 'DELETE',
-                headers: token ? { Authorization: `Bearer ${token}` } : {}
-            });
-            this._history = [];
-            this._historicalIndex = null;
-        } catch {
-            // ignore
-        }
-    }
-
-    private _notifyResult(result: ValidationResult) {
-        if (
-            !this._notificationContext ||
-            result.fetchError ||
-            !result.published
-        )
-            return;
-        const s = result.summary;
-        if (s.none) return;
-        if (s.invalid > 0) {
-            this._notificationContext.peek('danger', {
-                data: {
-                    headline: 'Schema errors detected',
-                    message: `${s.invalid} block${s.invalid !== 1 ? 's have' : ' has'} errors that will prevent rich results.`
-                }
-            });
-        } else if (s.warnings > 0) {
-            this._notificationContext.peek('warning', {
-                data: {
-                    headline: 'Schema recommendations',
-                    message: `${s.warnings} block${s.warnings !== 1 ? 's have' : ' has'} missing properties that could improve rich result eligibility.`
-                }
-            });
-        } else {
-            this._notificationContext.peek('positive', {
-                data: {
-                    headline: 'Schema looks good',
-                    message: `All ${s.valid} block${s.valid !== 1 ? 's' : ''} passed validation.`
-                }
-            });
-        }
-    }
-
-    private _blockStatus(b: SchemaBlock): 'valid' | 'warning' | 'invalid' {
-        if (b.errors.length > 0) return 'invalid';
-        if (b.warnings.length > 0) return 'warning';
-        return 'valid';
-    }
-
-    private _toggleFilter(filter: 'valid' | 'warning' | 'invalid') {
-        this._activeFilter = this._activeFilter === filter ? null : filter;
-    }
-
-    private _filteredBlocks(): SchemaBlock[] {
-        if (!this._result) return [];
-        if (!this._activeFilter) return this._result.blocks;
-        return this._result.blocks.filter(
-            (b) => this._blockStatus(b) === this._activeFilter
+      });
+      if (!o.ok)
+        throw new Error(
+          `Validation request failed: ${o.status} ${o.statusText}`
         );
+      this._result = await o.json(), this._result && this._notifyResult(this._result), this._fetchHistory(e);
+    } catch (t) {
+      this._error = t instanceof Error ? t.message : "An unexpected error occurred.";
+    } finally {
+      this._loading = !1;
     }
-
-    private async _revalidate() {
-        if (!this._unique || this._loading) return;
-        await this._validate(this._unique);
-    }
-
-    private _toggleCollapse(index: number) {
-        const next = new Set(this._collapsedBlocks);
-        if (next.has(index)) {
-            next.delete(index);
-        } else {
-            next.add(index);
+  }
+  async _fetchHistory(e) {
+    try {
+      const t = this._tokenProvider ? await this._tokenProvider() : void 0, o = await fetch(`${g}/validate/history/${e}`, {
+        headers: {
+          Accept: "application/json",
+          ...t ? { Authorization: `Bearer ${t}` } : {}
         }
-        this._collapsedBlocks = next;
+      });
+      o.ok && (this._history = await o.json());
+    } catch {
     }
-
-    private _toggleAll() {
-        if (!this._result) return;
-        const allCollapsed = this._result.blocks.every((b) =>
-            this._collapsedBlocks.has(b.index)
-        );
-        const next = new Set(this._collapsedBlocks);
-        for (const b of this._result.blocks) {
-            if (allCollapsed) {
-                next.delete(b.index);
-            } else {
-                next.add(b.index);
-            }
+  }
+  async _loadHistoryEntry(e, t) {
+    this._historyLoading = t;
+    try {
+      const o = this._tokenProvider ? await this._tokenProvider() : void 0, r = await fetch(`${g}/validate/history/${e}/${t}`, {
+        headers: {
+          Accept: "application/json",
+          ...o ? { Authorization: `Bearer ${o}` } : {}
         }
-        this._collapsedBlocks = next;
+      });
+      r.ok && (this._result = await r.json(), this._historicalIndex = t, this._activeFilter = null, this._collapsedBlocks = /* @__PURE__ */ new Set());
+    } catch {
+    } finally {
+      this._historyLoading = null;
     }
-
-    private _allCollapsed(): boolean {
-        if (!this._result || this._result.blocks.length === 0) return false;
-        return this._result.blocks.every((b) =>
-            this._collapsedBlocks.has(b.index)
-        );
+  }
+  async _deleteHistoryEntry(e, t) {
+    try {
+      const o = this._tokenProvider ? await this._tokenProvider() : void 0;
+      await fetch(`${g}/validate/history/${e}/${t}`, {
+        method: "DELETE",
+        headers: o ? { Authorization: `Bearer ${o}` } : {}
+      }), this._historicalIndex === t && (this._historicalIndex = null, this._result = null), this._fetchHistory(e);
+    } catch {
     }
-
-    private _getDuplicateTypes(): string[] {
-        if (!this._result) return [];
-        const counts: Record<string, number> = {};
-        for (const b of this._result.blocks) {
-            if (b.type && b.type !== 'Unknown' && b.type !== 'Invalid JSON') {
-                counts[b.type] = (counts[b.type] ?? 0) + 1;
-            }
-        }
-        return Object.entries(counts)
-            .filter(([, count]) => count > 1)
-            .map(([type]) => type);
+  }
+  async _clearHistory(e) {
+    try {
+      const t = this._tokenProvider ? await this._tokenProvider() : void 0;
+      await fetch(`${g}/validate/history/${e}`, {
+        method: "DELETE",
+        headers: t ? { Authorization: `Bearer ${t}` } : {}
+      }), this._history = [], this._historicalIndex = null;
+    } catch {
     }
-
-    private _renderSummary() {
-        if (!this._result) return null;
-        const s = this._result.summary;
-        const f = this._activeFilter;
-        const total = s.valid + s.warnings + s.invalid;
-
-        const cardClass = (filter: 'valid' | 'warning' | 'invalid') => {
-            if (f === null) return `stat-card stat-card--${filter}`;
-            if (f === filter) return `stat-card stat-card--${filter} stat-card--active`;
-            return `stat-card stat-card--${filter} stat-card--dimmed`;
-        };
-
-        return html`
+  }
+  _notifyResult(e) {
+    if (!this._notificationContext || e.fetchError || !e.published)
+      return;
+    const t = e.summary;
+    t.none || (t.invalid > 0 ? this._notificationContext.peek("danger", {
+      data: {
+        headline: "Schema errors detected",
+        message: `${t.invalid} block${t.invalid !== 1 ? "s have" : " has"} errors that will prevent rich results.`
+      }
+    }) : t.warnings > 0 ? this._notificationContext.peek("warning", {
+      data: {
+        headline: "Schema recommendations",
+        message: `${t.warnings} block${t.warnings !== 1 ? "s have" : " has"} missing properties that could improve rich result eligibility.`
+      }
+    }) : this._notificationContext.peek("positive", {
+      data: {
+        headline: "Schema looks good",
+        message: `All ${t.valid} block${t.valid !== 1 ? "s" : ""} passed validation.`
+      }
+    }));
+  }
+  _blockStatus(e) {
+    return e.errors.length > 0 ? "invalid" : e.warnings.length > 0 ? "warning" : "valid";
+  }
+  _toggleFilter(e) {
+    this._activeFilter = this._activeFilter === e ? null : e;
+  }
+  _filteredBlocks() {
+    return this._result ? this._activeFilter ? this._result.blocks.filter(
+      (e) => this._blockStatus(e) === this._activeFilter
+    ) : this._result.blocks : [];
+  }
+  async _revalidate() {
+    !this._unique || this._loading || await this._validate(this._unique);
+  }
+  _toggleCollapse(e) {
+    const t = new Set(this._collapsedBlocks);
+    t.has(e) ? t.delete(e) : t.add(e), this._collapsedBlocks = t;
+  }
+  _toggleAll() {
+    if (!this._result) return;
+    const e = this._result.blocks.every(
+      (o) => this._collapsedBlocks.has(o.index)
+    ), t = new Set(this._collapsedBlocks);
+    for (const o of this._result.blocks)
+      e ? t.delete(o.index) : t.add(o.index);
+    this._collapsedBlocks = t;
+  }
+  _allCollapsed() {
+    return !this._result || this._result.blocks.length === 0 ? !1 : this._result.blocks.every(
+      (e) => this._collapsedBlocks.has(e.index)
+    );
+  }
+  _getDuplicateTypes() {
+    if (!this._result) return [];
+    const e = {};
+    for (const t of this._result.blocks)
+      t.type && t.type !== "Unknown" && t.type !== "Invalid JSON" && (e[t.type] = (e[t.type] ?? 0) + 1);
+    return Object.entries(e).filter(([, t]) => t > 1).map(([t]) => t);
+  }
+  _renderSummary() {
+    if (!this._result) return null;
+    const e = this._result.summary, t = this._activeFilter, o = e.valid + e.warnings + e.invalid, r = (s) => t === null ? `stat-card stat-card--${s}` : t === s ? `stat-card stat-card--${s} stat-card--active` : `stat-card stat-card--${s} stat-card--dimmed`;
+    return a`
             <div class="stats-row">
                 <div
-                    class=${cardClass('valid')}
-                    @click=${() => this._toggleFilter('valid')}
+                    class=${r("valid")}
+                    @click=${() => this._toggleFilter("valid")}
                     title="Click to filter by valid blocks"
                     role="button" tabindex="0"
                 >
-                    <div class="stat-card__icon">${svgStatValid}</div>
+                    <div class="stat-card__icon">${A}</div>
                     <div class="stat-card__info">
-                        <span class="stat-card__value">${s.valid}</span>
+                        <span class="stat-card__value">${e.valid}</span>
                         <span class="stat-card__label">Valid</span>
                     </div>
                 </div>
 
                 <div
-                    class=${cardClass('warning')}
-                    @click=${() => this._toggleFilter('warning')}
+                    class=${r("warning")}
+                    @click=${() => this._toggleFilter("warning")}
                     title="Click to filter by warning blocks"
                     role="button" tabindex="0"
                 >
-                    <div class="stat-card__icon">${svgStatWarning}</div>
+                    <div class="stat-card__icon">${C}</div>
                     <div class="stat-card__info">
-                        <span class="stat-card__value">${s.warnings}</span>
+                        <span class="stat-card__value">${e.warnings}</span>
                         <span class="stat-card__label">Warnings</span>
                     </div>
                 </div>
 
                 <div
-                    class=${cardClass('invalid')}
-                    @click=${() => this._toggleFilter('invalid')}
+                    class=${r("invalid")}
+                    @click=${() => this._toggleFilter("invalid")}
                     title="Click to filter by invalid blocks"
                     role="button" tabindex="0"
                 >
-                    <div class="stat-card__icon">${svgStatInvalid}</div>
+                    <div class="stat-card__icon">${B}</div>
                     <div class="stat-card__info">
-                        <span class="stat-card__value">${s.invalid}</span>
+                        <span class="stat-card__value">${e.invalid}</span>
                         <span class="stat-card__label">Invalid</span>
                     </div>
                 </div>
 
                 <div class="stat-card stat-card--total">
-                    <div class="stat-card__icon">${svgStatBlocks}</div>
+                    <div class="stat-card__icon">${R}</div>
                     <div class="stat-card__info">
-                        <span class="stat-card__value">${total}</span>
+                        <span class="stat-card__value">${o}</span>
                         <span class="stat-card__label">Total Blocks</span>
                     </div>
                 </div>
@@ -743,63 +534,52 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
 
             <div class="filter-row">
                 <div class="filter-row__hint">
-                    ${f
-                        ? html`<p class="filter-hint">Showing <strong>${f}</strong> blocks only &mdash; click the card again to clear.</p>`
-                        : null}
+                    ${t ? a`<p class="filter-hint">Showing <strong>${t}</strong> blocks only &mdash; click the card again to clear.</p>` : null}
                 </div>
                 <div class="summary-actions">
                     <uui-button
                         look="primary"
                         compact
                         @click=${this._toggleAll}
-                        title=${this._allCollapsed()
-                            ? 'Expand all blocks'
-                            : 'Collapse all blocks'}
+                        title=${this._allCollapsed() ? "Expand all blocks" : "Collapse all blocks"}
                     >
                         <span class="btn-content">
-                            ${this._allCollapsed()
-                                ? 'Expand all'
-                                : 'Collapse all'}
-                            ${svgChevron(this._allCollapsed())}
+                            ${this._allCollapsed() ? "Expand all" : "Collapse all"}
+                            ${m(this._allCollapsed())}
                         </span>
                     </uui-button>
-                    ${this._result.url
-                        ? html`
+                    ${this._result.url ? a`
                               <uui-button
                                   look="primary"
-                                  href=${'https://search.google.com/test/rich-results?url=' +
-                                  encodeURIComponent(this._result.url)}
+                                  href=${"https://search.google.com/test/rich-results?url=" + encodeURIComponent(this._result.url)}
                                   target="_blank"
                                   label="Rich Results Test"
                                   title="Check which Google rich result features this page qualifies for (opens in a new tab)"
                               >
                                   <span class="btn-content">
-                                      Rich Results Test ${svgExternalLink}
+                                      Rich Results Test ${p}
                                   </span>
                               </uui-button>
                               <uui-button
                                   look="primary"
-                                  href=${'https://validator.schema.org/#url=' +
-                                  encodeURIComponent(this._result.url)}
+                                  href=${"https://validator.schema.org/#url=" + encodeURIComponent(this._result.url)}
                                   target="_blank"
                                   label="Validate on schema.org"
                                   title="Open this page in Google's Schema Markup Validator (opens in a new tab)"
                               >
                                   <span class="btn-content">
-                                      Validate on schema.org ${svgExternalLink}
+                                      Validate on schema.org ${p}
                                   </span>
                               </uui-button>
-                          `
-                        : null}
+                          ` : null}
                 </div>
             </div>
         `;
-    }
-
-    private _renderHistory() {
-        if (!this._unique || this._history.length === 0) return null;
-        const unique = this._unique;
-        return html`
+  }
+  _renderHistory() {
+    if (!this._unique || this._history.length === 0) return null;
+    const e = this._unique;
+    return a`
             <div class="history-section">
                 <h4 class="section-heading section-heading--history">
                     <svg class="section-heading__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -812,17 +592,19 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                     Validation history
                     <span class="section-heading-count">
                         (<strong>${this._history.length}</strong>
-                        scan${this._history.length !== 1 ? 's' : ''})
+                        scan${this._history.length !== 1 ? "s" : ""})
                     </span>
                     <uui-button look="outline" compact
-                        @click=${() => { this._historyExpanded = !this._historyExpanded; }}>
+                        @click=${() => {
+      this._historyExpanded = !this._historyExpanded;
+    }}>
                         <span class="btn-content">
-                            ${this._historyExpanded ? 'Collapse' : 'Show'}
-                            ${svgChevron(this._historyExpanded)}
+                            ${this._historyExpanded ? "Collapse" : "Show"}
+                            ${m(this._historyExpanded)}
                         </span>
                     </uui-button>
                 </h4>
-                ${this._historyExpanded ? html`
+                ${this._historyExpanded ? a`
                     <div class="exec-card history-table-card">
                         <table class="history-table">
                             <thead>
@@ -836,39 +618,38 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                                 </tr>
                             </thead>
                             <tbody>
-                                ${this._history.map((h) => {
-                                    const isActive = this._result !== null && (this._historicalIndex ?? 0) === h.index;
-                                    return html`
-                                    <tr class="${isActive ? 'history-row--active' : ''}">
-                                        <td>${new Date(h.scannedAt).toLocaleString()}</td>
-                                        <td><span class="count-badge count-badge--valid">${h.validBlocks}</span></td>
-                                        <td><span class="count-badge count-badge--warnings">${h.warningBlocks}</span></td>
-                                        <td><span class="count-badge count-badge--invalid">${h.invalidBlocks}</span></td>
-                                        <td>${h.totalBlocks}</td>
+                                ${this._history.map((t) => {
+      const o = this._result !== null && (this._historicalIndex ?? 0) === t.index;
+      return a`
+                                    <tr class="${o ? "history-row--active" : ""}">
+                                        <td>${new Date(t.scannedAt).toLocaleString()}</td>
+                                        <td><span class="count-badge count-badge--valid">${t.validBlocks}</span></td>
+                                        <td><span class="count-badge count-badge--warnings">${t.warningBlocks}</span></td>
+                                        <td><span class="count-badge count-badge--invalid">${t.invalidBlocks}</span></td>
+                                        <td>${t.totalBlocks}</td>
                                         <td class="history-actions">
-                                            ${h.hasResult ? html`
-                                                <uui-button look="${isActive ? 'primary' : 'outline'}" compact
+                                            ${t.hasResult ? a`
+                                                <uui-button look="${o ? "primary" : "outline"}" compact
                                                     class="history-load-btn"
-                                                    ?disabled=${this._historyLoading === h.index}
-                                                    @click=${() => this._loadHistoryEntry(unique, h.index)}>
-                                                    ${this._historyLoading === h.index
-                                                        ? html`<uui-loader-circle></uui-loader-circle>`
-                                                        : (isActive ? 'Loaded' : 'Load')}
+                                                    ?disabled=${this._historyLoading === t.index}
+                                                    @click=${() => this._loadHistoryEntry(e, t.index)}>
+                                                    ${this._historyLoading === t.index ? a`<uui-loader-circle></uui-loader-circle>` : o ? "Loaded" : "Load"}
                                                 </uui-button>
                                             ` : null}
                                             <uui-button look="primary" compact color="danger"
-                                                @click=${() => this._deleteHistoryEntry(unique, h.index)}
+                                                @click=${() => this._deleteHistoryEntry(e, t.index)}
                                                 title="Delete this history entry">
                                                 Delete
                                             </uui-button>
                                         </td>
                                     </tr>
-                                `; })}
+                                `;
+    })}
                             </tbody>
                         </table>
                         <div class="history-footer">
                             <uui-button look="primary" compact color="danger"
-                                @click=${() => this._clearHistory(unique)}>
+                                @click=${() => this._clearHistory(e)}>
                                 Clear all history
                             </uui-button>
                         </div>
@@ -876,34 +657,24 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                 ` : null}
             </div>
         `;
-    }
-
-    private _renderMessage(
-        raw: string,
-        index: number,
-        kind: 'error' | 'warning'
-    ) {
-        const msg = enrichMessage(raw);
-        const titleNode = msg.propertyName
-            ? html`
-                  <code class="prop-name">"${msg.propertyName}"</code>
-                  ${msg.title}
-              `
-            : msg.title;
-
-        return html`
+  }
+  _renderMessage(e, t, o) {
+    const r = E(e), s = r.propertyName ? a`
+                  <code class="prop-name">"${r.propertyName}"</code>
+                  ${r.title}
+              ` : r.title;
+    return a`
             <li class="msg-item">
                 <div class="msg-header">
-                    <span class="msg-index">${index}.</span>
-                    <span class="msg-kind msg-kind--${kind}">
-                        ${kind === 'error' ? 'Error' : 'Warning'}
+                    <span class="msg-index">${t}.</span>
+                    <span class="msg-kind msg-kind--${o}">
+                        ${o === "error" ? "Error" : "Warning"}
                     </span>
-                    <strong class="msg-title">${titleNode}</strong>
-                    ${msg.docsUrl
-                        ? html`
+                    <strong class="msg-title">${s}</strong>
+                    ${r.docsUrl ? a`
                               <uui-button
                                   look="primary"
-                                  href=${msg.docsUrl}
+                                  href=${r.docsUrl}
                                   class="msg-button"
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -912,99 +683,72 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                                   compact
                               >
                                   <span class="btn-content">
-                                      Learn more ${svgExternalLink}
+                                      Learn more ${p}
                                   </span>
                               </uui-button>
-                          `
-                        : null}
+                          ` : null}
                 </div>
-                ${msg.detail
-                    ? html`
-                          <p class="msg-detail">${msg.detail}</p>
-                      `
-                    : null}
-                ${msg.example
-                    ? html`
-                          <pre class="msg-example">${msg.example}</pre>
-                      `
-                    : null}
+                ${r.detail ? a`
+                          <p class="msg-detail">${r.detail}</p>
+                      ` : null}
+                ${r.example ? a`
+                          <pre class="msg-example">${r.example}</pre>
+                      ` : null}
             </li>
         `;
+  }
+  _exampleValue(e) {
+    return {
+      "@context": '"https://schema.org"',
+      "@type": '"Article"',
+      headline: '"Your article headline"',
+      name: '"Your name or organisation name"',
+      description: '"A brief description of this content"',
+      url: '"https://example.com/page"',
+      image: '"https://example.com/image.jpg"',
+      datePublished: '"2024-01-01"',
+      dateModified: '"2024-01-01"',
+      author: '{ "@type": "Person", "name": "Author Name" }',
+      publisher: '{ "@type": "Organization", "name": "Publisher Name" }',
+      mainEntityOfPage: '"https://example.com/page"',
+      articleBody: '"The full text of the article…"',
+      articleSection: '"Technology"'
+    }[e] ?? '"…"';
+  }
+  _buildAnnotations(e) {
+    const t = [];
+    for (const o of e.errors)
+      o === "Missing @context" ? t.push({ prop: "@context", kind: "error" }) : o === "Missing @type" && t.push({ prop: "@type", kind: "error" });
+    for (const o of e.warnings) {
+      const r = o.match(/^Recommended: (\S+)$/);
+      r && t.push({ prop: r[1], kind: "warning" });
     }
-
-    private _exampleValue(prop: string): string {
-        const map: Record<string, string> = {
-            '@context': '"https://schema.org"',
-            '@type': '"Article"',
-            headline: '"Your article headline"',
-            name: '"Your name or organisation name"',
-            description: '"A brief description of this content"',
-            url: '"https://example.com/page"',
-            image: '"https://example.com/image.jpg"',
-            datePublished: '"2024-01-01"',
-            dateModified: '"2024-01-01"',
-            author: '{ "@type": "Person", "name": "Author Name" }',
-            publisher: '{ "@type": "Organization", "name": "Publisher Name" }',
-            mainEntityOfPage: '"https://example.com/page"',
-            articleBody: '"The full text of the article…"',
-            articleSection: '"Technology"'
-        };
-        return map[prop] ?? '"…"';
-    }
-
-    private _buildAnnotations(
-        b: SchemaBlock
-    ): Array<{ prop: string; kind: 'error' | 'warning' }> {
-        const items: Array<{ prop: string; kind: 'error' | 'warning' }> = [];
-        for (const e of b.errors) {
-            if (e === 'Missing @context')
-                items.push({ prop: '@context', kind: 'error' });
-            else if (e === 'Missing @type')
-                items.push({ prop: '@type', kind: 'error' });
-        }
-        for (const w of b.warnings) {
-            const m = w.match(/^Recommended: (\S+)$/);
-            if (m) items.push({ prop: m[1], kind: 'warning' });
-        }
-        return items;
-    }
-
-    private _renderJsonBlock(b: SchemaBlock) {
-        return html`
+    return t;
+  }
+  _renderJsonBlock(e) {
+    return a`
             <div class="json-viewer">
-                <div class="json-viewer__header">JSON — ${b.type}</div>
-                <pre class="json-viewer__pre"><code class="json-viewer__code">${b.raw}</code></pre>
+                <div class="json-viewer__header">JSON — ${e.type}</div>
+                <pre class="json-viewer__pre"><code class="json-viewer__code">${e.raw}</code></pre>
             </div>
         `;
-    }
-
-    private _renderExamplesBlock(b: SchemaBlock) {
-        const annotations = this._buildAnnotations(b);
-        if (annotations.length === 0) return null;
-
-        const lines = b.raw.split('\n');
-
-        // Find insertion point — before the last closing brace
-        let insertIdx = lines.length - 1;
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (lines[i].trim() === '}') {
-                insertIdx = i;
-                break;
-            }
-        }
-
-        // Detect indentation from the first property line
-        const firstProp = lines.find((l) => l.trim().startsWith('"'));
-        const indent = firstProp?.match(/^(\s+)/)?.[1] ?? '  ';
-
-        // prettier-ignore
-        const renderLine = (line: string) => html`<span class="jv-line">${line + '\n'}</span>`;
-
-        // prettier-ignore
-        const renderGhost = ({ prop, kind }: { prop: string; kind: 'error' | 'warning' }) =>
-            html`<span class="jv-line jv-line--ghost jv-line--${kind}">${indent}<span class="jv-ghost-pill">${kind === 'error' ? '✗ missing' : '+ add'}</span> &quot;${prop}&quot;: ${this._exampleValue(prop)}${'\n'}</span>`;
-
-        return html`
+  }
+  _renderExamplesBlock(e) {
+    var v;
+    const t = this._buildAnnotations(e);
+    if (t.length === 0) return null;
+    const o = e.raw.split(`
+`);
+    let r = o.length - 1;
+    for (let c = o.length - 1; c >= 0; c--)
+      if (o[c].trim() === "}") {
+        r = c;
+        break;
+      }
+    const s = o.find((c) => c.trim().startsWith('"')), i = ((v = s == null ? void 0 : s.match(/^(\s+)/)) == null ? void 0 : v[1]) ?? "  ", n = (c) => a`<span class="jv-line">${c + `
+`}</span>`, h = ({ prop: c, kind: b }) => a`<span class="jv-line jv-line--ghost jv-line--${b}">${i}<span class="jv-ghost-pill">${b === "error" ? "✗ missing" : "+ add"}</span> &quot;${c}&quot;: ${this._exampleValue(c)}${`
+`}</span>`;
+    return a`
             <div class="examples-block">
                 <strong class="examples-block__title">Suggested fix</strong>
                 <p class="examples-block__desc">
@@ -1014,155 +758,110 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                     to ensure they are accurate and valid for your content before publishing.
                 </p>
                 <div class="json-viewer">
-                    <div class="json-viewer__header">JSON — ${b.type}</div>
+                    <div class="json-viewer__header">JSON — ${e.type}</div>
                     <pre class="json-viewer__pre"><code>${[
-                        ...lines.slice(0, insertIdx).map(renderLine),
-                        ...annotations.map(renderGhost),
-                        ...lines.slice(insertIdx).map(renderLine)
-                    ]}</code></pre>
+      ...o.slice(0, r).map(n),
+      ...t.map(h),
+      ...o.slice(r).map(n)
+    ]}</code></pre>
                 </div>
             </div>
         `;
-    }
-
-    private _renderSourceMeta(b: SchemaBlock) {
-        const locationPill = b.location
-            ? html`<span class="source-location source-location--${b.location}">&lt;${b.location}&gt;</span>`
-            : null;
-
-        const locationNote =
-            b.location === 'head'
-                ? html`<span class="source-note source-note--positive">Correctly placed — Google recommends JSON-LD in <code>&lt;head&gt;</code> for fastest discovery.</span>`
-                : b.location === 'body'
-                  ? html`<span class="source-note source-note--warning">Found in <code>&lt;body&gt;</code> — consider moving to <code>&lt;head&gt;</code> for better search engine compatibility.</span>`
-                  : null;
-
-        if (this._result?.hasTemplate && this._result?.documentType) {
-            return html`
+  }
+  _renderSourceMeta(e) {
+    var r, s;
+    const t = e.location ? a`<span class="source-location source-location--${e.location}">&lt;${e.location}&gt;</span>` : null, o = e.location === "head" ? a`<span class="source-note source-note--positive">Correctly placed — Google recommends JSON-LD in <code>&lt;head&gt;</code> for fastest discovery.</span>` : e.location === "body" ? a`<span class="source-note source-note--warning">Found in <code>&lt;body&gt;</code> — consider moving to <code>&lt;head&gt;</code> for better search engine compatibility.</span>` : null;
+    return (r = this._result) != null && r.hasTemplate && ((s = this._result) != null && s.documentType) ? a`
                 <div class="source-meta">
                     <div class="source-meta__row">
-                        ${locationPill}${locationNote}
+                        ${t}${o}
                     </div>
                     <div class="source-meta__row">
                         <span class="source-note">Template: <strong>${this._result.documentType}</strong> — this schema may originate from <code>Views/${this._result.documentType}.cshtml</code>, a partial view, or a layout used by that template.</span>
                     </div>
                 </div>
-            `;
-        }
-
-        return html`
+            ` : a`
             <div class="source-meta source-meta--unknown">
-                ${locationPill || locationNote
-                    ? html`<div class="source-meta__row">${locationPill}${locationNote}</div>`
-                    : null}
+                ${t || o ? a`<div class="source-meta__row">${t}${o}</div>` : null}
                 <div class="source-meta__row">
                     <span class="source-note source-note--muted">Source unknown — this block may be injected by an external tool, plugin, or script tag not tied to a Razor template.</span>
                 </div>
             </div>
         `;
-    }
-
-    private _renderRichResultSection(b: SchemaBlock) {
-        if (!b.richResultStatus || b.richResultStatus === 'unknown') return null;
-        const eligible = b.richResultStatus === 'eligible';
-        const docsUrl = RICH_RESULT_DOCS[b.type] ?? null;
-        const missing = b.richResultMissingFields ?? [];
-
-        return html`
-            <div class="rich-result-section rich-result-section--${b.richResultStatus}">
+  }
+  _renderRichResultSection(e) {
+    if (!e.richResultStatus || e.richResultStatus === "unknown") return null;
+    const t = e.richResultStatus === "eligible", o = T[e.type] ?? null, r = e.richResultMissingFields ?? [];
+    return a`
+            <div class="rich-result-section rich-result-section--${e.richResultStatus}">
                 <div class="rich-result-header">
-                    <span class="rich-result-badge rich-result-badge--${b.richResultStatus}">
-                        ${eligible ? '✓' : '✗'} Google Rich Results
+                    <span class="rich-result-badge rich-result-badge--${e.richResultStatus}">
+                        ${t ? "✓" : "✗"} Google Rich Results
                     </span>
-                    ${eligible
-                        ? html`<span class="rich-result-msg">This block meets Google's requirements for <strong>${b.type}</strong> rich results.</span>`
-                        : html`<span class="rich-result-msg">Missing <strong>${missing.length}</strong> required field${missing.length !== 1 ? 's' : ''} for Google rich results.</span>`}
-                    ${docsUrl
-                        ? html`<uui-button look="primary" href=${docsUrl} target="_blank" compact>
-                               <span class="btn-content">Google docs ${svgExternalLink}</span>
-                           </uui-button>`
-                        : null}
+                    ${t ? a`<span class="rich-result-msg">This block meets Google's requirements for <strong>${e.type}</strong> rich results.</span>` : a`<span class="rich-result-msg">Missing <strong>${r.length}</strong> required field${r.length !== 1 ? "s" : ""} for Google rich results.</span>`}
+                    ${o ? a`<uui-button look="primary" href=${o} target="_blank" compact>
+                               <span class="btn-content">Google docs ${p}</span>
+                           </uui-button>` : null}
                 </div>
-                ${!eligible && missing.length
-                    ? html`<p class="rich-result-missing">
-                          Required: ${missing.map((f, i) => html`<code class="prop-name">${f}</code>${i < missing.length - 1 ? html`, ` : null}`)}
-                      </p>`
-                    : null}
+                ${!t && r.length ? a`<p class="rich-result-missing">
+                          Required: ${r.map((s, i) => a`<code class="prop-name">${s}</code>${i < r.length - 1 ? a`, ` : null}`)}
+                      </p>` : null}
             </div>
         `;
-    }
-
-    private _renderBlock(b: SchemaBlock) {
-        const status = this._blockStatus(b);
-        const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-        const invalidTypes = ['Unknown', 'Invalid JSON'];
-        const typeDocsUrl = !invalidTypes.includes(b.type)
-            ? `https://schema.org/${b.type}`
-            : null;
-        const isCollapsed = this._collapsedBlocks.has(b.index);
-
-        return html`
+  }
+  _renderBlock(e) {
+    const t = this._blockStatus(e), o = t.charAt(0).toUpperCase() + t.slice(1), s = ["Unknown", "Invalid JSON"].includes(e.type) ? null : `https://schema.org/${e.type}`, i = this._collapsedBlocks.has(e.index);
+    return a`
             <uui-box
-                class="block-box block-box--${status}${isCollapsed
-                    ? ' block-box--collapsed'
-                    : ''}"
+                class="block-box block-box--${t}${i ? " block-box--collapsed" : ""}"
             >
                 <div slot="headline" class="block-headline">
                     <span
-                        class="block-status-badge block-status-badge--${status}"
+                        class="block-status-badge block-status-badge--${t}"
                     >
-                        ${statusLabel}
+                        ${o}
                     </span>
-                    Block ${b.index}: ${b.type}
+                    Block ${e.index}: ${e.type}
                 </div>
 
-                ${typeDocsUrl
-                    ? html`
+                ${s ? a`
                           <uui-button
                               slot="header-actions"
                               look="outline"
-                              href=${typeDocsUrl}
+                              href=${s}
                               target="_blank"
-                              label=${'schema.org/' + b.type}
-                              title=${'View schema.org documentation for ' +
-                              b.type +
-                              ' (opens in a new tab)'}
+                              label=${"schema.org/" + e.type}
+                              title=${"View schema.org documentation for " + e.type + " (opens in a new tab)"}
                               compact
                           >
                               <span class="btn-content">
-                                  schema.org ${svgExternalLink}
+                                  schema.org ${p}
                               </span>
                           </uui-button>
                           <span
                               slot="header-actions"
                               class="header-btn-sep"
                           ></span>
-                      `
-                    : null}
+                      ` : null}
 
                 <uui-button
                     slot="header-actions"
                     look="outline"
                     compact
-                    @click=${() => this._toggleCollapse(b.index)}
-                    title=${isCollapsed
-                        ? 'Expand this block'
-                        : 'Collapse this block'}
+                    @click=${() => this._toggleCollapse(e.index)}
+                    title=${i ? "Expand this block" : "Collapse this block"}
                 >
                     <span class="btn-content">
-                        ${isCollapsed ? 'Expand' : 'Collapse'}
-                        ${svgChevron(!isCollapsed)}
+                        ${i ? "Expand" : "Collapse"}
+                        ${m(!i)}
                     </span>
                 </uui-button>
 
-                ${isCollapsed
-                    ? null
-                    : html`
-                          ${this._renderSourceMeta(b)}
-                          ${this._renderRichResultSection(b)}
-                          ${this._renderJsonBlock(b)}
-                          ${b.errors.length
-                              ? html`
+                ${i ? null : a`
+                          ${this._renderSourceMeta(e)}
+                          ${this._renderRichResultSection(e)}
+                          ${this._renderJsonBlock(e)}
+                          ${e.errors.length ? a`
                                     <uui-alert color="danger" headline="Errors">
                                         <p
                                             class="alert-subtitle alert-subtitle--danger"
@@ -1172,19 +871,17 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                                             structured data by search engines.
                                         </p>
                                         <ul class="msg-list">
-                                            ${b.errors.map((e, i) =>
-                                                this._renderMessage(
-                                                    e,
-                                                    i + 1,
-                                                    'error'
-                                                )
-                                            )}
+                                            ${e.errors.map(
+      (n, h) => this._renderMessage(
+        n,
+        h + 1,
+        "error"
+      )
+    )}
                                         </ul>
                                     </uui-alert>
-                                `
-                              : null}
-                          ${b.warnings.length
-                              ? html`
+                                ` : null}
+                          ${e.warnings.length ? a`
                                     <uui-alert
                                         color="warning"
                                         headline="Recommendations"
@@ -1198,40 +895,33 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                                             Google Search.
                                         </p>
                                         <ul class="msg-list">
-                                            ${b.warnings.map((w, i) =>
-                                                this._renderMessage(
-                                                    w,
-                                                    i + 1,
-                                                    'warning'
-                                                )
-                                            )}
+                                            ${e.warnings.map(
+      (n, h) => this._renderMessage(
+        n,
+        h + 1,
+        "warning"
+      )
+    )}
                                         </ul>
                                     </uui-alert>
-                                `
-                              : null}
-                          ${this._renderExamplesBlock(b)}
+                                ` : null}
+                          ${this._renderExamplesBlock(e)}
                       `}
             </uui-box>
         `;
-    }
-
-    private _renderFetchErrorAlert() {
-        const error = this._result!.fetchError!;
-        const url = this._result!.url;
-        const is404 = error.includes('404');
-        return html`
+  }
+  _renderFetchErrorAlert() {
+    const e = this._result.fetchError, t = this._result.url, o = e.includes("404");
+    return a`
             <uui-alert color="warning" headline="Could not fetch page">
-                <p class="state-msg">${error}</p>
-                ${url
-                    ? html`
+                <p class="state-msg">${e}</p>
+                ${t ? a`
                           <div class="fetch-url-box">
                               <span class="fetch-url-label">URL attempted</span>
-                              <code class="fetch-url-code">${url}</code>
+                              <code class="fetch-url-code">${t}</code>
                           </div>
-                      `
-                    : null}
-                ${is404
-                    ? html`
+                      ` : null}
+                ${o ? a`
                           <div class="fetch-hint-box">
                               <strong>Tip:</strong> Check
                               <strong>Content &rsaquo; Culture &amp; Hostnames</strong>
@@ -1240,38 +930,26 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                               running server — if you still see a 404, confirm the page
                               has a template assigned and is accessible at the URL above.
                           </div>
-                      `
-                    : null}
+                      ` : null}
             </uui-alert>
         `;
-    }
-
-    override render() {
-        if (this._loading) {
-            return html`
+  }
+  render() {
+    var i;
+    if (this._loading)
+      return a`
                 <div class="loader"><uui-loader></uui-loader></div>
             `;
-        }
-
-        if (this._error) {
-            return html`
+    if (this._error)
+      return a`
                 <uui-alert color="danger">${this._error}</uui-alert>
             `;
-        }
-
-        if (!this._result) {
-            return html`
+    if (!this._result)
+      return a`
                 <uui-alert>No result.</uui-alert>
             `;
-        }
-
-        const isReady = this._result.published && !this._result.fetchError;
-        const filtered = isReady ? this._filteredBlocks() : [];
-        const duplicates = isReady ? this._getDuplicateTypes() : [];
-        const { summary: s } = this._result;
-        const total = isReady ? s.valid + s.invalid + s.warnings : 0;
-
-        return html`
+    const e = this._result.published && !this._result.fetchError, t = e ? this._filteredBlocks() : [], o = e ? this._getDuplicateTypes() : [], { summary: r } = this._result, s = e ? r.valid + r.invalid + r.warnings : 0;
+    return a`
             <div class="page-header">
                 <div class="page-header-main">
                     <div>
@@ -1288,8 +966,7 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                     </div>
                 </div>
                 <div class="header-actions">
-                    ${isReady && this._result.url
-                        ? html`
+                    ${e && this._result.url ? a`
                               <uui-button
                                   look="outline"
                                   href=${this._result.url}
@@ -1297,11 +974,10 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                                   title="Open the published page in a new tab"
                               >
                                   <span class="btn-content"
-                                      >View page ${svgExternalLink}</span
+                                      >View page ${p}</span
                                   >
                               </uui-button>
-                          `
-                        : null}
+                          ` : null}
                     <uui-button
                         look="primary"
                         color="positive"
@@ -1310,13 +986,13 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                         title="Re-run validation against the current published page"
                     >
                         <span class="btn-content"
-                            >Re-validate ${svgRotateCw}</span
+                            >Re-validate ${f}</span
                         >
                     </uui-button>
                 </div>
             </div>
 
-            ${this._historicalIndex !== null ? html`
+            ${this._historicalIndex !== null ? a`
                 <div class="exec-card historical-card">
                     <div class="historical-card__header">
                         <svg class="historical-card__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -1328,11 +1004,11 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                         </svg>
                         <div class="historical-card__content">
                             <span class="historical-card__label">Historical scan</span>
-                            <span class="historical-card__date">${new Date(this._history[this._historicalIndex]?.scannedAt ?? '').toLocaleString()}</span>
+                            <span class="historical-card__date">${new Date(((i = this._history[this._historicalIndex]) == null ? void 0 : i.scannedAt) ?? "").toLocaleString()}</span>
                             <span class="historical-card__meta">Entry ${this._historicalIndex + 1} of ${this._history.length} — not the latest result</span>
                         </div>
                         <uui-button look="primary" color="positive" compact @click=${() => this._revalidate()}>
-                            <span class="btn-content">Re-validate ${svgRotateCw}</span>
+                            <span class="btn-content">Re-validate ${f}</span>
                         </uui-button>
                     </div>
                 </div>
@@ -1342,8 +1018,7 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
 
             ${this._result.fetchError ? this._renderFetchErrorAlert() : null}
 
-            ${!this._result.published
-                ? html`
+            ${this._result.published ? null : a`
                       <uui-alert headline="Page not published">
                           <p class="state-msg">
                               This page hasn't been published yet — there is no
@@ -1355,14 +1030,12 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                               to check its schema markup.
                           </p>
                       </uui-alert>
-                  `
-                : null}
+                  `}
 
-            ${isReady
-                ? html`
+            ${e ? a`
                       ${this._renderSummary()}
 
-                      ${duplicates.length > 0 ? html`
+                      ${o.length > 0 ? a`
                       <h4 class="section-heading">
                           <svg class="section-heading__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
                               stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
@@ -1374,15 +1047,14 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                           Page schema data duplication
                           <span class="section-heading-count">
                               (
-                              <strong>${duplicates.length}</strong>
+                              <strong>${o.length}</strong>
                               duplicate schema
-                              type${duplicates.length !== 1 ? 's' : ''} found)
+                              type${o.length !== 1 ? "s" : ""} found)
                           </span>
                       </h4>
                       ` : null}
 
-                      ${duplicates.length > 0
-                          ? html`
+                      ${o.length > 0 ? a`
                                 <uui-box class="block-box block-box--warning">
                                     <div slot="headline" class="block-headline">
                                         <span
@@ -1401,18 +1073,16 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                                         ignored.
                                     </p>
                                     <ul class="dup-list">
-                                        ${duplicates.map(
-                                            (t) =>
-                                                html`<li>
+                                        ${o.map(
+      (n) => a`<li>
                                                     <code class="prop-name"
-                                                        >${t}</code
+                                                        >${n}</code
                                                     >
                                                 </li>`
-                                        )}
+    )}
                                     </ul>
                                 </uui-box>
-                            `
-                          : null}
+                            ` : null}
 
                       <h4 class="section-heading">
                           <svg class="section-heading__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -1426,20 +1096,18 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                           Page schema data analysis
                           <span class="section-heading-count">
                               (
-                              <strong>${total}</strong>
-                              schema block${total !== 1 ? 's' : ''} detected on
+                              <strong>${s}</strong>
+                              schema block${s !== 1 ? "s" : ""} detected on
                               this page)
                           </span>
                       </h4>
 
-                      ${this._result.summary.none
-                              ? html`
+                      ${this._result.summary.none ? a`
                                     <uui-box headline="No schema markup found" class="no-schema-box">
                                         <p class="state-msg">
                                             No <code>application/ld+json</code> blocks were found on this page.
                                         </p>
-                                        ${this._result.suggestedSchemaType
-                                            ? html`
+                                        ${this._result.suggestedSchemaType ? a`
                                                   <p class="state-hint suggestion-lead">
                                                       Based on the
                                                       <strong>${this._result.documentType}</strong>
@@ -1449,10 +1117,12 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
                                                   </p>
                                                   <div class="json-viewer">
                                                       <div class="json-viewer__header">JSON — ${this._result.suggestedSchemaType} example</div>
-                                                      <pre class="json-viewer__pre"><code class="json-viewer__code">${SCHEMA_EXAMPLES[this._result.suggestedSchemaType] ?? `{\n  "@context": "https://schema.org",\n  "@type": "${this._result.suggestedSchemaType}"\n}`}</code></pre>
+                                                      <pre class="json-viewer__pre"><code class="json-viewer__code">${P[this._result.suggestedSchemaType] ?? `{
+  "@context": "https://schema.org",
+  "@type": "${this._result.suggestedSchemaType}"
+}`}</code></pre>
                                                   </div>
-                                              `
-                                            : null}
+                                              ` : null}
                                     </uui-box>
                                     <uui-box headline="Configure schema type suggestions" class="no-schema-box">
                                         <p class="appsettings-tip__body">
@@ -1473,22 +1143,18 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
 }</code></pre>
                                         </div>
                                     </uui-box>
-                                `
-                              : null}
-                          ${filtered.length === 0 && this._activeFilter
-                              ? html`
+                                ` : null}
+                          ${t.length === 0 && this._activeFilter ? a`
                                     <uui-alert>
                                         No ${this._activeFilter} blocks on this
                                         page.
                                     </uui-alert>
-                                `
-                              : filtered.map((b) => this._renderBlock(b))}
-                  `
-                : null}
+                                ` : t.map((n) => this._renderBlock(n))}
+                  ` : null}
         `;
-    }
-
-    static override styles = css`
+  }
+};
+l.styles = y`
         :host {
             display: block;
             padding: var(--uui-size-layout-1);
@@ -2408,12 +2074,39 @@ export class SchemaPreviewWorkspaceView extends UmbElementMixin(LitElement) {
             overflow-x: auto;
         }
     `;
-}
-
-export default SchemaPreviewWorkspaceView;
-
-declare global {
-    interface HTMLElementTagNameMap {
-        'schema-preview-workspace-view': SchemaPreviewWorkspaceView;
-    }
-}
+d([
+  u()
+], l.prototype, "_loading", 2);
+d([
+  u()
+], l.prototype, "_result", 2);
+d([
+  u()
+], l.prototype, "_error", 2);
+d([
+  u()
+], l.prototype, "_activeFilter", 2);
+d([
+  u()
+], l.prototype, "_collapsedBlocks", 2);
+d([
+  u()
+], l.prototype, "_history", 2);
+d([
+  u()
+], l.prototype, "_historyExpanded", 2);
+d([
+  u()
+], l.prototype, "_historyLoading", 2);
+d([
+  u()
+], l.prototype, "_historicalIndex", 2);
+l = d([
+  _("schema-preview-workspace-view")
+], l);
+const U = l;
+export {
+  l as SchemaPreviewWorkspaceView,
+  U as default
+};
+//# sourceMappingURL=workspace-view.element-CoKGcpq7.js.map

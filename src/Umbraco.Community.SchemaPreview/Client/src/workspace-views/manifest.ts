@@ -8,7 +8,7 @@ export const manifests: Array<UmbExtensionManifest> = [
     meta: {
       label: "uSchema",
       pathname: "uschema",
-      icon: "icon-settings-alt",
+      icon: "icon-search",
     },
     conditions: [
       {
