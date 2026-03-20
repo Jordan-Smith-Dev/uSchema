@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-20
+
+### Added
+- **Validation history** — the workspace tab now stores a per-page history of recent scans; the history table shows the date, time, and block summary for each entry; any previous result can be loaded in full; the most recent scan is highlighted as active on load
+- **Schema type suggestions** — when a page has no JSON-LD markup, uSchema can suggest an appropriate schema type based on the Umbraco document type alias, and displays a ready-to-use example block to help get started; configured via `DocumentTypeSchemaMap` in `appsettings.json`
+- **"Suggested fix" panel** — the annotated JSON block shown for blocks with errors or warnings is now headed with a title and description clarifying that it addresses all flagged issues in the block (not just the last listed item) and that example values should be reviewed before use
+- **Google Rich Results eligibility** — each schema block now shows whether it meets Google's requirements for rich results, lists any missing required fields, and links directly to Google's Rich Results documentation for that type
+
+### Changed
+- Duplicate type detection section is now hidden when no duplicates are found, rather than showing a "0 duplicates" heading
+- Source location template hint reworded as a suggestion ("may originate from...") rather than a definitive file path, to account for layouts and partial views
+- Section headings in the workspace tab and dashboard now include icons and consistent styling
+- JSON viewer blocks are now labelled with the schema type (e.g. "JSON — Article") for clarity
+- Appsettings configuration tip redesigned: clearer copy explaining what keys and values represent, with a clean JSON example
+
+### Fixed
+- History row correctly highlights as active after the initial scan (index 0) without requiring a manual load
+
 ## [1.0.1] - 2026-03-10
 
 ### Fixed
