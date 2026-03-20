@@ -1,0 +1,41 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@Model.Name</title>
+    <script type="application/ld+json">
+    {
+        "@@context": "https://schema.org",
+        "@@type": "Product",
+        "name": "@Model.Name",
+        "description": "A sample product available in our store.",
+        "image": "https://example.com/images/product.jpg",
+        "brand": {
+            "@@type": "Brand",
+            "name": "Example Brand"
+        },
+        "offers": {
+            "@@type": "Offer",
+            "url": "@Model.Url()",
+            "priceCurrency": "GBP",
+            "price": "49.99",
+            "availability": "https://schema.org/InStock",
+            "itemCondition": "https://schema.org/NewCondition"
+        },
+        "aggregateRating": {
+            "@@type": "AggregateRating",
+            "ratingValue": "4.5",
+            "reviewCount": "24"
+        }
+    }
+    </script>
+</head>
+<body>
+    <h1>@Model.Name</h1>
+    <p>This is a test product page for uSchema validation.</p>
+</body>
+</html>

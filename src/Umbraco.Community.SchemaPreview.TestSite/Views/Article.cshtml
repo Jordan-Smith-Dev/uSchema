@@ -1,0 +1,39 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@Model.Name</title>
+    <script type="application/ld+json">
+    {
+        "@@context": "https://schema.org",
+        "@@type": "Article",
+        "headline": "@Model.Name",
+        "datePublished": "@Model.CreateDate.ToString("yyyy-MM-dd")",
+        "dateModified": "@Model.UpdateDate.ToString("yyyy-MM-dd")",
+        "author": {
+            "@@type": "Person",
+            "name": "Test Author"
+        },
+        "image": "https://example.com/images/article-hero.jpg",
+        "publisher": {
+            "@@type": "Organization",
+            "name": "Example Publisher",
+            "logo": {
+                "@@type": "ImageObject",
+                "url": "https://example.com/images/logo.png"
+            }
+        },
+        "description": "A sample article demonstrating structured data for uSchema validation.",
+        "url": "@Model.Url()"
+    }
+    </script>
+</head>
+<body>
+    <h1>@Model.Name</h1>
+    <p>This is a test article page for uSchema validation.</p>
+</body>
+</html>

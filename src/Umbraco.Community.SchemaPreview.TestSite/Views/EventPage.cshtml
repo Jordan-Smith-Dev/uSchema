@@ -1,0 +1,44 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>@Model.Name</title>
+    <script type="application/ld+json">
+    {
+        "@@context": "https://schema.org",
+        "@@type": "Event",
+        "name": "@Model.Name",
+        "startDate": "2026-06-15T10:00:00",
+        "endDate": "2026-06-15T18:00:00",
+        "location": {
+            "@@type": "Place",
+            "name": "Example Venue",
+            "address": {
+                "@@type": "PostalAddress",
+                "streetAddress": "123 Event Street",
+                "addressLocality": "London",
+                "postalCode": "EC1A 1BB",
+                "addressCountry": "GB"
+            }
+        },
+        "organizer": {
+            "@@type": "Organization",
+            "name": "Example Organiser",
+            "url": "https://example.com"
+        },
+        "description": "A sample event page demonstrating structured data for uSchema validation.",
+        "url": "@Model.Url()",
+        "eventStatus": "https://schema.org/EventScheduled",
+        "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode"
+    }
+    </script>
+</head>
+<body>
+    <h1>@Model.Name</h1>
+    <p>This is a test event page for uSchema validation.</p>
+</body>
+</html>
